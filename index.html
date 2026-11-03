@@ -3,9 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AIESEC Egypt Finance CRM</title>
+<title>AIESEC Egypt Finance</title>
 <style>
-  /* ---------- Colours and basics ---------- */
   :root {
     --blue: #037ef3; --blue-dark: #0263c0; --ink: #1d2433; --muted: #667085;
     --line: #e4e7ec; --bg: #f5f7fb; --card: #ffffff;
@@ -15,59 +14,86 @@
   body { margin: 0; font-family: "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; }
   button, input, select { font: inherit; }
   h1 { font-size: 18px; margin: 0; }
-  h2 { font-size: 18px; margin: 0 0 12px; }
+  h2 { font-size: 20px; margin: 0 0 12px; }
   h3 { font-size: 15px; margin: 0 0 10px; }
   .muted { color: var(--muted); }
   .small { font-size: 12px; }
   .hidden { display: none !important; }
 
-  /* ---------- Top bar and tabs ---------- */
   header { background: var(--blue); color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header a { color: #fff; text-decoration: none; }
   header .badge { background: rgba(255,255,255,.2); border-radius: 20px; padding: 2px 10px; font-size: 12px; }
-  nav { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
-  nav button { background: transparent; color: #fff; border: 0; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
-  nav button.active, nav button:hover { background: rgba(255,255,255,.2); }
-  main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+  header .spacer { margin-left: auto; }
+  header button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.5); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+  .back { display: inline-block; margin-bottom: 14px; color: var(--blue); text-decoration: none; font-weight: 600; }
 
-  /* ---------- Cards, tiles, forms ---------- */
+  /* Home boxes */
+  .boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-top: 30px; }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px 24px; cursor: pointer; text-align: left;
+         transition: transform .12s, box-shadow .12s, border-color .12s; color: inherit; text-decoration: none; display: block; }
+  .box:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(3,126,243,.12); border-color: var(--blue); }
+  .box .icon { width: 52px; height: 52px; border-radius: 14px; background: #e8f1fd; color: var(--blue); display: grid; place-items: center; font-size: 26px; margin-bottom: 16px; }
+  .box h2 { margin: 0 0 6px; }
+  .box p { margin: 0; color: var(--muted); }
+  .box .soon { display: inline-block; margin-top: 10px; background: var(--mid-bg); color: var(--mid); border-radius: 10px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 18px; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
   .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
   .tile .label { color: var(--muted); font-size: 12px; }
   .tile .value { font-size: 22px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .tile .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .grid2 { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 18px; align-items: start; }
-  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } nav { margin-left: 0; } }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
   label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
   input, select { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
   input:focus, select:focus { outline: 2px solid var(--blue); border-color: transparent; }
   .seg { display: flex; gap: 6px; }
   .seg button { flex: 1; padding: 9px; border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; }
   .seg button.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .seg.type button.on[data-v="Expense"] { background: var(--bad); border-color: var(--bad); }
+  .seg.type button.on[data-v="Revenue"] { background: var(--good); border-color: var(--good); }
   .btn { background: var(--blue); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; font-weight: 600; }
   .btn:hover { background: var(--blue-dark); }
   .btn.ghost { background: #fff; color: var(--blue); border: 1px solid var(--blue); }
+  .btn.link { background: none; color: var(--blue); padding: 6px 0; }
   .btn:disabled { opacity: .6; cursor: wait; }
   .btn.full { width: 100%; margin-top: 16px; }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .row > * { flex: 1; }
+  .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 140px; }
 
-  /* ---------- Tables ---------- */
   .table-wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
-  th { font-size: 12px; color: var(--muted); font-weight: 600; background: #fafbfc; position: sticky; top: 0; }
-  td.num, th.num { text-align: right; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; background: #fafbfc; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  #cfTable td:first-child, #evEntries td:first-child { white-space: nowrap; }
   tr.total td { font-weight: 700; background: #fafbfc; }
+  tr.group td { font-weight: 700; background: #f2f6fc; }
   .neg { color: var(--bad); }
-  .del { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; }
-  .del:hover { color: var(--bad); }
-  .cell-main { font-weight: 600; }
-  .pill { display: inline-block; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 600; margin-top: 2px; }
+  .pos { color: var(--good); }
+  .pill { display: inline-block; border-radius: 10px; padding: 1px 8px; font-size: 11px; font-weight: 600; }
   .pill.good { background: var(--good-bg); color: var(--good); }
-  .pill.mid { background: var(--mid-bg); color: var(--mid); }
   .pill.bad { background: var(--bad-bg); color: var(--bad); }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; min-width: 80px; }
+  .bar span { display: block; height: 100%; background: var(--blue); }
+  .bar span.over { background: var(--bad); }
 
-  /* ---------- Messages ---------- */
+  /* Wizard */
+  .steps { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+  .steps div { flex: 1; min-width: 110px; padding: 8px 10px; border-radius: 8px; background: #eef1f6; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .steps div.on { background: var(--blue); color: #fff; }
+  .steps div.done { background: #cfe3ff; color: var(--blue-dark); }
+  .line-row { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; margin-bottom: 8px; align-items: center; }
+  @media (max-width: 640px) { .line-row { grid-template-columns: 1fr auto; } .line-row select { grid-column: 1 / -1; grid-row: 2; } }
+  .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px 8px; }
+  .x:hover { color: var(--bad); }
+  .wiz-nav { display: flex; justify-content: space-between; margin-top: 18px; gap: 10px; }
+
+  .event-list .item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .event-list .item:hover { background: #fafbfc; }
+
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 8px; max-width: 90vw; z-index: 10; }
   #toast.error { background: var(--bad); }
   .note { background: #eef5ff; border: 1px solid #cfe3ff; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
@@ -77,118 +103,145 @@
 <body>
 
 <header>
-  <h1>AIESEC in Egypt · Finance CRM</h1>
-  <span id="modeBadge" class="badge hidden">Demo data</span>
-  <nav id="nav" class="hidden">
-    <button data-page="dashboard" class="active">Dashboard</button>
-    <button data-page="surplus">Surplus</button>
-    <button data-page="cashflow">Cash flow</button>
-    <button data-page="income">Income statement</button>
-    <button data-page="targets">Targets</button>
-    <button data-page="settings">Settings</button>
-  </nav>
+  <h1><a href="#home">AIESEC in Egypt · Finance</a></h1>
+  <span id="modeBadge" class="badge hidden">Demo data — nothing is saved</span>
+  <span class="spacer"></span>
+  <button id="disconnectBtn" class="hidden">Disconnect</button>
 </header>
 
 <main>
-  <!-- CONNECT SCREEN: shown until the API link + key are saved in this browser -->
+  <!-- CONNECT -->
   <section id="page-connect" class="card connect hidden">
-    <h2>Connect to your CRM database</h2>
-    <p class="muted">Paste the Web App URL and the API key from your "Finance CRM Database" Google Sheet (Settings tab). They're saved only in this browser.</p>
+    <h2>Connect to the finance sheet</h2>
+    <p class="muted">Paste the Web App URL and the API key from your "finance" Google Sheet (menu <b>Finance website → Show API key</b>). They're saved only in this browser.</p>
     <label>Web App URL</label>
     <input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec">
     <label>API key</label>
-    <input id="apiKey" type="password" placeholder="From the Settings tab">
+    <input id="apiKey" type="password">
     <button class="btn full" id="connectBtn">Connect</button>
     <button class="btn ghost full" id="demoBtn">Try with demo data</button>
   </section>
 
-  <!-- DASHBOARD -->
-  <section id="page-dashboard" class="hidden">
-    <div class="row" style="margin-bottom:14px">
-      <div style="flex:0 0 220px"><label>Period</label><select id="dashMonth"></select></div>
-      <div class="muted small" id="syncInfo" style="align-self:end"></div>
-      <div style="flex:0 0 auto;align-self:end"><button class="btn ghost" id="syncBtn">Sync LC tools now</button></div>
-    </div>
-    <div class="tiles" id="dashTiles"></div>
-    <div class="card">
-      <h3>LC performance: actual vs. target</h3>
-      <p class="muted small">Each cell: approvals or slots, refunds (counted separately), and net money (revenue − refunds − discounts) in EGP. % of target uses approvals/slots. Read from each LC tool's Cashflow tab (read only).</p>
-      <div class="table-wrap"><table id="dashTable"></table></div>
-    </div>
-  </section>
-
-  <!-- SURPLUS -->
-  <section id="page-surplus" class="hidden">
-    <div class="grid2">
-      <div class="card">
-        <h2>Add cash to LC reserve</h2>
-        <label>Date</label><input type="date" id="rDate">
-        <label>LC</label><select id="rLc"></select>
-        <label>Currency</label>
-        <div class="seg" id="rCurrency"><button data-v="EGP" class="on">EGP</button><button data-v="USD">USD</button><button data-v="EUR">EUR</button></div>
-        <label>Amount</label><input type="number" id="rAmount" min="0" step="0.01" placeholder="0.00">
-        <label>Note (optional)</label><input id="rNote" placeholder="e.g. receipt number">
-        <button class="btn full" id="rSave">Add to reserve</button>
-        <p class="muted small">This updates the LC's reserve balance and adds an income line to the MC cash flow at the same time.</p>
-      </div>
-      <div>
-        <div class="card"><h3>LC reserve balances</h3><div class="table-wrap"><table id="reserveTable"></table></div></div>
-        <div class="card"><h3>Latest surplus entries</h3><div class="table-wrap"><table id="reserveLog"></table></div></div>
-      </div>
+  <!-- HOME: the three boxes -->
+  <section id="page-home" class="hidden">
+    <div class="boxes">
+      <a class="box" href="#cashflow">
+        <div class="icon">⇄</div>
+        <h2>Cash flow</h2>
+        <p>Add a revenue or an expense. It goes straight into [MAIN] Cashflow in the finance sheet.</p>
+      </a>
+      <a class="box" href="#events">
+        <div class="icon">★</div>
+        <h2>Create event budget</h2>
+        <p>Plan an event's revenues and expenses, then track actual money against the budget.</p>
+      </a>
+      <a class="box" href="#reserve">
+        <div class="icon">⛁</div>
+        <h2>Cash added to reserve</h2>
+        <p>Record cash that LCs add to their reserve.</p>
+        <span class="soon">Coming soon</span>
+      </a>
     </div>
   </section>
 
   <!-- CASH FLOW -->
   <section id="page-cashflow" class="hidden">
-    <div class="tiles" id="cashTiles"></div>
+    <a class="back" href="#home">← Home</a>
+    <div class="tiles" id="cfTiles"></div>
     <div class="grid2">
       <div class="card">
-        <h2>Add cash flow line</h2>
-        <label>Date</label><input type="date" id="cDate">
+        <h2>Add to cash flow</h2>
+        <label>Date</label><input type="date" id="cfDate">
         <label>Type</label>
-        <div class="seg" id="cType"><button data-v="Received" class="on">Received</button><button data-v="Paid">Paid</button></div>
+        <div class="seg type" id="cfType"><button data-v="Revenue" class="on">Revenue</button><button data-v="Expense">Expense</button></div>
         <label>Currency</label>
-        <div class="seg" id="cCurrency"><button data-v="EGP" class="on">EGP</button><button data-v="USD">USD</button><button data-v="EUR">EUR</button></div>
-        <label>Amount</label><input type="number" id="cAmount" min="0" step="0.01" placeholder="0.00">
-        <label>Description</label><input id="cDesc" placeholder="e.g. office rent October">
-        <div id="cIncomeWrap"><label>INCOME Sub-Category</label><select id="cIncome"></select></div>
-        <div id="cExpenseWrap" class="hidden"><label>Expense Sub-Category</label><select id="cExpense"></select></div>
-        <button class="btn full" id="cSave">Save line</button>
-        <p class="muted small" id="masterInfo"></p>
+        <div class="seg" id="cfCurrency"><button data-v="EGP" class="on">EGP</button><button data-v="USD">USD</button><button data-v="EUR">EUR</button></div>
+        <label>Amount</label><input type="number" id="cfAmount" min="0" step="0.01" placeholder="0.00">
+        <label>Category</label><select id="cfCategory"></select>
+        <label>Description</label><input id="cfDesc" placeholder="e.g. office rent November">
+        <button class="btn full" id="cfSave">Submit</button>
       </div>
-      <div class="card"><h3>Latest cash flow lines</h3><div class="table-wrap"><table id="cashLog"></table></div></div>
-    </div>
-  </section>
-
-  <!-- INCOME STATEMENT -->
-  <section id="page-income" class="hidden">
-    <div class="card">
-      <h2>MC income statement (EGP)</h2>
-      <p class="muted small">Built automatically from the CRM cash flow. USD and EUR are converted at the rates in Settings.</p>
-      <div class="table-wrap"><table id="isTable"></table></div>
-    </div>
-  </section>
-
-  <!-- TARGETS -->
-  <section id="page-targets" class="hidden">
-    <div class="card" style="max-width:720px">
-      <h2>Monthly targets per LC</h2>
-      <div class="row">
-        <div><label>LC</label><select id="tLc"></select></div>
-        <div><label>Month</label><input type="month" id="tMonth"></div>
+      <div class="card">
+        <div class="row" style="margin-bottom:10px">
+          <h3 style="margin:0;align-self:center">Lines in the sheet</h3>
+          <div style="flex:0 0 180px"><select id="cfMonth"></select></div>
+        </div>
+        <div class="table-wrap"><table id="cfTable"></table></div>
       </div>
-      <div class="table-wrap" style="margin-top:14px"><table id="tTable"></table></div>
-      <button class="btn full" id="tSave">Save targets</button>
     </div>
   </section>
 
-  <!-- SETTINGS -->
-  <section id="page-settings" class="hidden">
-    <div class="card" style="max-width:720px">
-      <h2>Settings</h2>
-      <div id="settingsInfo"></div>
-      <p class="note">Exchange rates, opening balances, LC tool links and the "copy to Master Tool" switch live in the <b>Settings</b> and <b>LCs</b> tabs of your Finance CRM Database sheet. Change them there, then reload this page.</p>
-      <button class="btn ghost" id="disconnectBtn">Disconnect this browser</button>
+  <!-- EVENTS LIST -->
+  <section id="page-events" class="hidden">
+    <a class="back" href="#home">← Home</a>
+    <div class="card" style="max-width:760px">
+      <div class="row" style="margin-bottom:6px">
+        <h2 style="margin:0">Event budgets</h2>
+        <div style="flex:0 0 auto"><a class="btn" href="#new-event" style="text-decoration:none;display:inline-block">+ Create event budget</a></div>
+      </div>
+      <div class="event-list" id="eventList"></div>
+    </div>
+  </section>
+
+  <!-- NEW EVENT WIZARD -->
+  <section id="page-new-event" class="hidden">
+    <a class="back" href="#events">← Event budgets</a>
+    <div class="card" style="max-width:860px">
+      <h2>Create event budget</h2>
+      <div class="steps" id="wzSteps"></div>
+      <div id="wzBody"></div>
+      <div class="wiz-nav">
+        <button class="btn ghost" id="wzBack">Back</button>
+        <button class="btn" id="wzNext">Next</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- EVENT DETAIL -->
+  <section id="page-event" class="hidden">
+    <a class="back" href="#events">← Event budgets</a>
+    <h2 id="evTitle"></h2>
+    <div class="tiles" id="evTiles"></div>
+    <div class="grid2">
+      <div>
+        <div class="card">
+          <h3>Add to event cash flow</h3>
+          <label>Date</label><input type="date" id="evDate">
+          <label>Type</label>
+          <div class="seg type" id="evType"><button data-v="Revenue" class="on">Revenue</button><button data-v="Expense">Expense</button></div>
+          <label>Budget line</label><select id="evItem"></select>
+          <label>Currency</label>
+          <div class="seg" id="evCurrency"><button data-v="EGP" class="on">EGP</button><button data-v="USD">USD</button><button data-v="EUR">EUR</button></div>
+          <label>Amount</label><input type="number" id="evAmount" min="0" step="0.01" placeholder="0.00">
+          <label>Description (optional)</label><input id="evDesc" placeholder="e.g. deposit for the venue">
+          <button class="btn full" id="evSave">Submit</button>
+          <p class="muted small">Saved in the event tab and in [MAIN] Cashflow at the same time.</p>
+        </div>
+        <div class="card">
+          <button class="btn link" id="evLineToggle">+ Add a new budget line</button>
+          <div id="evLineForm" class="hidden">
+            <label>Type</label>
+            <div class="seg type" id="elType"><button data-v="Revenue" class="on">Revenue</button><button data-v="Expense">Expense</button></div>
+            <label>Name</label><input id="elItem" placeholder="e.g. Sponsorship">
+            <label>GFB category</label><select id="elGfb"></select>
+            <label>Expected amount (EGP)</label><input type="number" id="elExpected" min="0" step="0.01">
+            <button class="btn full" id="elSave">Add line</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card"><h3>Budget: expected vs. actual (EGP)</h3><div class="table-wrap"><table id="evBudget"></table></div></div>
+        <div class="card"><h3>Event cash flow</h3><div class="table-wrap"><table id="evEntries"></table></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESERVE -->
+  <section id="page-reserve" class="hidden">
+    <a class="back" href="#home">← Home</a>
+    <div class="card" style="max-width:640px">
+      <h2>Cash added to reserve</h2>
+      <p class="note">This part is coming next. Tell me how it should work and I'll build it.</p>
     </div>
   </section>
 </main>
@@ -196,9 +249,7 @@
 <div id="toast" class="hidden"></div>
 
 <script>
-// =====================================================================
-// 1) Talking to the backend (Google Apps Script)
-// =====================================================================
+// ===================================================================== backend
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
@@ -207,378 +258,359 @@ const store = {
 let DEMO = false;
 
 async function api(action, data) {
-  if (DEMO) return demoApi(action, data);
-  const res = await fetch(store.get('crm_url'), {
+  if (DEMO) return demoApi(action, data || {});
+  const res = await fetch(store.get('fin_url'), {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS pre-check
-    body: JSON.stringify({ key: store.get('crm_key'), action, data }),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: store.get('fin_key'), action, data: data || {} }),
   });
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Something went wrong');
   return json.data;
 }
 
-// =====================================================================
-// 2) Small helpers
-// =====================================================================
+// ===================================================================== helpers
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (n, d = 0) => (n == null || isNaN(n)) ? '–' : Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-const money = (n, cur = 'EGP') => `<span class="${n < 0 ? 'neg' : ''}">${fmt(n, cur === 'EGP' ? 0 : 2)}</span>`;
-const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }; // local date
-const monthName = m => m === 'ALL' ? 'Whole term' : new Date(m + '-01T00:00:00').toLocaleString('en-US', { month: 'short', year: 'numeric' });
+const money = (n, d = 0) => `<span class="${n < 0 ? 'neg' : ''}">${fmt(n, d)}</span>`;
+const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const short = c => String(c || '').replace(/^MC \| /, '');
+const monthName = m => new Date(m + '-01T00:00:00').toLocaleString('en-US', { month: 'long', year: 'numeric' });
+const tile = (label, value, sub) => `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
 
 function toast(msg, isError) {
   const t = $('toast');
   t.textContent = msg; t.className = isError ? 'error' : '';
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.add('hidden'), isError ? 6000 : 3000);
 }
-
 function segValue(id) { return $(id).querySelector('button.on').dataset.v; }
-document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
-  if (e.target.tagName !== 'BUTTON') return;
-  seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === e.target));
+function setSeg(id, v) { $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
+document.addEventListener('click', e => {
+  const b = e.target.closest('.seg button'); if (!b) return;
+  const seg = b.parentElement;
+  seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
   seg.dispatchEvent(new Event('change'));
-}));
-
+});
 async function busy(btn, fn) {
   btn.disabled = true;
   try { await fn(); } catch (err) { toast(err.message, true); } finally { btn.disabled = false; }
 }
-
-// =====================================================================
-// 3) Pages
-// =====================================================================
-let INIT = null;
-
-function showPage(name) {
-  document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
-  $('page-' + name).classList.remove('hidden');
-  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.page === name));
-  if (name === 'dashboard') loadDashboard();
-  if (name === 'income') loadIncome();
-  if (name === 'targets') loadTargets();
-  store.set('crm_page', name);
+function catOptions(list, placeholder) {
+  return `<option value="">${esc(placeholder || 'Choose category')}</option>` + list.map(c => `<option value="${esc(c)}">${esc(short(c))}</option>`).join('');
 }
-$('nav').addEventListener('click', e => { if (e.target.dataset.page) showPage(e.target.dataset.page); });
+
+// ===================================================================== routing
+let INIT = null;
+const PAGES = ['connect', 'home', 'cashflow', 'events', 'new-event', 'event', 'reserve'];
+function show(name) { PAGES.forEach(p => $('page-' + p).classList.toggle('hidden', p !== name)); window.scrollTo(0, 0); }
+
+function route() {
+  if (!INIT) return;
+  const h = decodeURIComponent(location.hash.slice(1) || 'home');
+  if (h.startsWith('event/')) { show('event'); loadEvent(h.slice(6)); return; }
+  const page = PAGES.includes(h) && h !== 'connect' ? h : 'home';
+  show(page);
+  if (page === 'cashflow') loadCashflow();
+  if (page === 'events') loadEvents();
+  if (page === 'new-event') wzStart();
+}
+window.addEventListener('hashchange', route);
 
 async function start() {
-  try {
-    INIT = await api('init');
-  } catch (err) {
-    toast('Could not connect: ' + err.message, true);
-    $('page-connect').classList.remove('hidden');
-    return;
-  }
-  $('nav').classList.remove('hidden');
+  try { INIT = await api('init'); }
+  catch (err) { toast('Could not connect: ' + err.message, true); show('connect'); return; }
   $('modeBadge').classList.toggle('hidden', !DEMO);
-  fillSelect($('rLc'), INIT.lcs);
-  fillSelect($('tLc'), INIT.lcs);
-  fillSelect($('cIncome'), INIT.incomeCategories, 'Choose income category');
-  fillSelect($('cExpense'), INIT.expenseCategories, 'Choose expense category');
-  $('rDate').value = $('cDate').value = today();
-  $('tMonth').value = today().slice(0, 7);
-  renderSurplus(); renderCashflow(); renderSettings();
-  showPage(store.get('crm_page') || 'dashboard');
+  $('disconnectBtn').classList.remove('hidden');
+  $('cfDate').value = $('evDate').value = INIT.today || today();
+  const m0 = (INIT.today || today()).slice(0, 7);
+  const months = []; for (let i = 0; i < 12; i++) { const d = new Date(m0 + '-01T00:00:00'); d.setMonth(d.getMonth() - i); months.push(d.toISOString().slice(0, 7)); }
+  $('cfMonth').innerHTML = months.map(m => `<option value="${m}">${monthName(m)}</option>`).join('');
+  fillCfCategory();
+  route();
 }
 
-function fillSelect(sel, items, placeholder) {
-  sel.innerHTML = (placeholder ? `<option value="">${esc(placeholder)}</option>` : '') +
-    items.map(i => `<option>${esc(i)}</option>`).join('');
+// ===================================================================== cash flow
+function fillCfCategory() {
+  const rev = segValue('cfType') === 'Revenue';
+  $('cfCategory').innerHTML = catOptions(rev ? INIT.incomeCategories : INIT.expenseCategories, rev ? 'Choose revenue category' : 'Choose expense category');
+}
+$('cfType').addEventListener('change', fillCfCategory);
+$('cfDate').addEventListener('change', () => { const m = $('cfDate').value.slice(0, 7); if ([...$('cfMonth').options].some(o => o.value === m)) $('cfMonth').value = m; });
+$('cfMonth').addEventListener('change', loadCashflow);
+
+async function loadCashflow() {
+  $('cfTable').innerHTML = '<tr><td class="muted">Loading…</td></tr>';
+  try {
+    const d = await api('cashflow', { month: $('cfMonth').value });
+    $('cfTiles').innerHTML = tile('Cash balance · EGP', money(d.balance.EGP), 'end of ' + monthName(d.month)) +
+      tile('Cash balance · USD', money(d.balance.USD, 2)) + tile('Cash balance · EUR', money(d.balance.EUR, 2));
+    $('cfTable').innerHTML = '<tr><th>Date</th><th>Description</th><th>Category</th><th class="num">Revenue</th><th class="num">Expense</th></tr>' +
+      (d.lines.length ? d.lines.map(x => {
+        const amt = `${fmt(x.amount, 2)} ${esc(x.currency)}`;
+        return `<tr><td class="small">${esc(x.date) || '<span class="muted">–</span>'}</td><td>${esc(x.description)}</td><td class="small">${esc(short(x.category))}</td>
+          <td class="num pos">${x.type === 'Revenue' ? amt : ''}</td><td class="num neg">${x.type === 'Expense' ? amt : ''}</td></tr>`;
+      }).join('') : `<tr><td colspan="5" class="muted">No lines in ${monthName(d.month)} yet</td></tr>`);
+  } catch (err) { $('cfTable').innerHTML = ''; toast(err.message, true); }
 }
 
-const toEgp = (b, r) => (b.EGP || 0) + (b.USD || 0) * r.USD + (b.EUR || 0) * r.EUR;
+$('cfSave').addEventListener('click', e => busy(e.target, async () => {
+  const data = { date: $('cfDate').value, type: segValue('cfType'), currency: segValue('cfCurrency'),
+    amount: Number($('cfAmount').value), category: $('cfCategory').value, description: $('cfDesc').value.trim() };
+  if (!data.date) throw new Error('Choose a date');
+  if (!(data.amount > 0)) throw new Error('Write an amount more than 0');
+  if (!data.category) throw new Error('Choose a category');
+  if (!data.description) throw new Error('Write a description');
+  const r = await api('addCashflow', data);
+  toast(`Saved in [MAIN] Cashflow (row ${r.row})`);
+  $('cfAmount').value = ''; $('cfDesc').value = '';
+  $('cfMonth').value = data.date.slice(0, 7);
+  loadCashflow();
+}));
 
-// ---------- Dashboard ----------
-const DASH_COLS = [
-  // key, title, how to show it
-  ['surplus', 'Surplus', 'money'],
-  ['ogv', 'oGV approvals', 'count'], ['ogta', 'oGTa approvals', 'count'], ['ogte', 'oGTe approvals', 'count'],
-  ['igv', 'iGV slots', 'count'], ['igta', 'iGTa slots', 'count'], ['igte', 'iGTe slots', 'count'],
-  ['tn', 'Profit / EP', 'perEp'], ['bd', 'BD deals', 'count'], ['conf', 'Local conf.', 'count'],
-];
+// ===================================================================== events list
+async function loadEvents() {
+  $('eventList').innerHTML = '<p class="muted">Loading…</p>';
+  try {
+    const list = await api('listEvents');
+    $('eventList').innerHTML = list.length ? list.map(ev => `<div class="item" data-name="${esc(ev.name)}">
+        <div><b>${esc(ev.name)}</b><div class="muted small">Expected net ${fmt(ev.expectedNet)} EGP · Actual net ${fmt(ev.actualNet)} EGP</div></div>
+        <span class="muted">›</span></div>`).join('')
+      : '<p class="muted">No events yet. Click “Create event budget” to start.</p>';
+  } catch (err) { $('eventList').innerHTML = ''; toast(err.message, true); }
+}
+$('eventList').addEventListener('click', e => { const it = e.target.closest('.item'); if (it) location.hash = 'event/' + encodeURIComponent(it.dataset.name); });
 
-function pctPill(actual, target) {
-  if (!target) return '';
-  const p = actual / target * 100;
-  const cls = p >= 100 ? 'good' : p >= 60 ? 'mid' : 'bad';
-  return `<div><span class="pill ${cls}">${fmt(p)}% of ${fmt(target)}</span></div>`;
+// ===================================================================== new event wizard
+const WZ_STEPS = ['1. Event name', '2. Revenue lines', '3. Expense lines', '4. Expected amounts', '5. Review'];
+let wz = null;
+function wzStart() { wz = { step: 0, name: '', revenue: [{ item: '', gfb: '' }], expense: [{ item: '', gfb: '' }] }; wzRender(); }
+
+function wzLinesHtml(kind) {
+  const list = wz[kind], cats = kind === 'revenue' ? INIT.incomeCategories : INIT.expenseCategories;
+  return `<p class="muted">Write each ${kind} item in simple words, and pick the official GFB category it belongs to (this keeps the Income Statement correct).${kind === 'revenue' ? ' Leave empty if the event has no revenue.' : ''}</p>
+    <div class="line-row muted small"><div>Item name</div><div>GFB category</div><div></div></div>` +
+    list.map((l, i) => `<div class="line-row" data-i="${i}">
+      <input data-f="item" value="${esc(l.item)}" placeholder="${kind === 'revenue' ? 'e.g. Tickets, Sponsorship' : 'e.g. Venue, Food, Transport'}">
+      <select data-f="gfb">${catOptions(cats, 'Choose GFB category').replace(`value="${esc(l.gfb)}"`, `value="${esc(l.gfb)}" selected`)}</select>
+      <button class="x" data-del="${i}" title="Remove">×</button></div>`).join('') +
+    `<button class="btn link" id="wzAdd">+ Add ${kind} line</button>`;
 }
 
-function dashCell(kind, a, t) {
-  a = a || { count: 0, amount: 0 }; t = t || {};
-  if (kind === 'money') return `<div class="cell-main">${money(a.amount)}</div>${pctPill(a.amount, t.amount)}`;
-  if (kind === 'perEp') {
-    const per = a.count ? a.amount / a.count : null;
-    return `<div class="cell-main">${per == null ? '–' : money(per)}</div><div class="muted small">${fmt(a.count)} EPs</div>${per == null ? '' : pctPill(per, t.amount)}`;
+function wzRender() {
+  $('wzSteps').innerHTML = WZ_STEPS.map((s, i) => `<div class="${i === wz.step ? 'on' : i < wz.step ? 'done' : ''}">${s}</div>`).join('');
+  const b = $('wzBody');
+  if (wz.step === 0) b.innerHTML = `<label>What is the name of the event?</label><input id="wzName" value="${esc(wz.name)}" placeholder="e.g. Youth Summit 2026">`;
+  if (wz.step === 1) b.innerHTML = wzLinesHtml('revenue');
+  if (wz.step === 2) b.innerHTML = wzLinesHtml('expense');
+  if (wz.step === 3) {
+    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="3">${title}</td></tr>` + wz[kind].map((l, i) =>
+      `<tr><td>${esc(l.item)}</td><td class="small muted">${esc(short(l.gfb))}</td><td style="width:180px"><input type="number" min="0" step="0.01" data-kind="${kind}" data-i="${i}" value="${l.expected ?? ''}" placeholder="0"></td></tr>`).join('') : '';
+    b.innerHTML = `<p class="muted">Fill the expected amount for each line, in EGP.</p><div class="table-wrap"><table>
+      <tr><th>Item</th><th>GFB category</th><th>Expected (EGP)</th></tr>${rows('revenue', 'Revenue')}${rows('expense', 'Expenses')}</table></div>`;
   }
-  const ref = a.refunds ? `<div class="small neg">${fmt(a.refunds)} refund${a.refunds === 1 ? '' : 's'}</div>` : '';
-  return `<div class="cell-main">${fmt(a.count)}</div>${ref}<div class="muted small">EGP ${money(a.amount)}</div>${pctPill(a.count, t.count)}`;
+  if (wz.step === 4) {
+    const sum = k => wz[k].reduce((s, l) => s + (Number(l.expected) || 0), 0);
+    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="3">${title}</td></tr>` + wz[kind].map(l =>
+      `<tr><td>${esc(l.item)}</td><td class="small muted">${esc(short(l.gfb))}</td><td class="num">${fmt(l.expected || 0, 2)}</td></tr>`).join('') +
+      `<tr class="total"><td colspan="2">Total ${title.toLowerCase()}</td><td class="num">${fmt(sum(kind), 2)}</td></tr>` : '';
+    b.innerHTML = `<h3>${esc(wz.name)}</h3><div class="table-wrap"><table><tr><th>Item</th><th>GFB category</th><th class="num">Expected (EGP)</th></tr>
+      ${rows('revenue', 'Revenue')}${rows('expense', 'Expenses')}
+      <tr class="total"><td colspan="2">Expected net (revenue − expenses)</td><td class="num">${money(sum('revenue') - sum('expense'), 2)}</td></tr></table></div>
+      <p class="muted small">Clicking “Create event” adds a new tab “[EVENT] ${esc(wz.name)}” to the finance sheet.</p>`;
+  }
+  $('wzBack').style.visibility = wz.step === 0 ? 'hidden' : 'visible';
+  $('wzNext').textContent = wz.step === 4 ? 'Create event' : 'Next';
 }
 
-async function loadDashboard() {
-  const sel = $('dashMonth');
-  const month = sel.value || 'ALL';
-  $('dashTable').innerHTML = '<tr><td class="muted">Loading…</td></tr>';
-  try {
-    const d = await api('dashboard', { month });
-    const keep = sel.value;
-    sel.innerHTML = ['ALL'].concat(d.months.slice().reverse()).map(m => `<option value="${m}">${monthName(m)}</option>`).join('');
-    sel.value = keep || 'ALL';
-    $('syncInfo').textContent = d.lastSync ? 'LC tools last synced: ' + d.lastSync : 'LC tools not synced yet';
-
-    const reservesEgp = Object.values(d.reserveBalances).reduce((s, b) => s + toEgp(b, d.rates), 0);
-    const surplus = d.lcs.reduce((s, l) => s + ((l.actual.surplus || {}).amount || 0), 0);
-    const tile = (label, value) => `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div></div>`;
-    $('dashTiles').innerHTML =
-      tile('MC cash · EGP', money(d.mcCash.EGP)) + tile('MC cash · USD', money(d.mcCash.USD, 'USD')) +
-      tile('MC cash · EUR', money(d.mcCash.EUR, 'EUR')) + tile('LC reserves (EGP equivalent)', money(reservesEgp)) +
-      tile('Surplus added · ' + monthName(d.month), money(surplus));
-
-    const totals = {};
-    let html = '<tr><th>LC</th><th class="num">Reserve (EGP eq.)</th>' + DASH_COLS.map(c => `<th>${c[1]}</th>`).join('') + '</tr>';
-    d.lcs.forEach(l => {
-      html += `<tr><td><b>${esc(l.lc)}</b></td><td class="num">${money(toEgp(d.reserveBalances[l.lc] || {}, d.rates))}</td>`;
-      DASH_COLS.forEach(([k, , kind]) => {
-        html += `<td>${dashCell(kind, l.actual[k], l.target[k])}</td>`;
-        const t = totals[k] = totals[k] || { a: { count: 0, refunds: 0, amount: 0 }, t: { count: 0, amount: 0 } };
-        if (l.actual[k]) { t.a.count += l.actual[k].count; t.a.refunds += l.actual[k].refunds || 0; t.a.amount += l.actual[k].amount; }
-        if (l.target[k]) { t.t.count += l.target[k].count; t.t.amount += k === 'tn' ? 0 : l.target[k].amount; }
-      });
-      html += '</tr>';
+function wzCollect() {
+  if (wz.step === 0) wz.name = $('wzName').value.trim();
+  if (wz.step === 1 || wz.step === 2) {
+    const kind = wz.step === 1 ? 'revenue' : 'expense';
+    wz[kind] = [...$('wzBody').querySelectorAll('.line-row[data-i]')].map(r => {
+      const old = wz[kind][r.dataset.i] || {};
+      return { item: r.querySelector('[data-f=item]').value.trim(), gfb: r.querySelector('[data-f=gfb]').value, expected: old.expected };
     });
-    html += `<tr class="total"><td>All LCs</td><td class="num">${money(reservesEgp)}</td>` +
-      DASH_COLS.map(([k, , kind]) => `<td>${dashCell(kind, (totals[k] || {}).a, (totals[k] || {}).t)}</td>`).join('') + '</tr>';
-    $('dashTable').innerHTML = html;
-  } catch (err) { toast(err.message, true); }
+  }
+  if (wz.step === 3) $('wzBody').querySelectorAll('input[data-kind]').forEach(i => { wz[i.dataset.kind][i.dataset.i].expected = i.value === '' ? '' : Number(i.value); });
 }
-$('dashMonth').addEventListener('change', loadDashboard);
-$('syncBtn').addEventListener('click', e => busy(e.target, async () => {
-  toast('Reading the LC tools… this can take up to a minute');
-  const r = await api('sync');
-  toast(r.errors ? `Synced with ${r.errors} LC error(s). Check the LCs tab.` : 'All LC tools synced');
-  loadDashboard();
-}));
 
-// ---------- Surplus ----------
-function renderSurplus() {
-  const r = INIT.rates;
-  let html = '<tr><th>LC</th><th class="num">EGP</th><th class="num">USD</th><th class="num">EUR</th><th class="num">Total in EGP</th></tr>';
-  let tot = { EGP: 0, USD: 0, EUR: 0 };
-  INIT.lcs.forEach(lc => {
-    const b = INIT.reserveBalances[lc] || {};
-    ['EGP', 'USD', 'EUR'].forEach(c => tot[c] += b[c] || 0);
-    html += `<tr><td>${esc(lc)}</td><td class="num">${money(b.EGP)}</td><td class="num">${money(b.USD, 'USD')}</td><td class="num">${money(b.EUR, 'EUR')}</td><td class="num">${money(toEgp(b, r))}</td></tr>`;
+function wzValidate() {
+  if (wz.step === 0 && !wz.name) throw new Error('Write the event name');
+  if (wz.step === 1 || wz.step === 2) {
+    const kind = wz.step === 1 ? 'revenue' : 'expense';
+    wz[kind] = wz[kind].filter(l => l.item || l.gfb);
+    const seen = {};
+    wz[kind].forEach(l => {
+      if (!l.item) throw new Error('Write a name for every line');
+      if (!l.gfb) throw new Error(`Choose a GFB category for "${l.item}"`);
+      if (seen[l.item.toLowerCase()]) throw new Error(`"${l.item}" is listed twice`);
+      seen[l.item.toLowerCase()] = 1;
+    });
+    if (wz.step === 2 && !wz.revenue.length && !wz.expense.length) throw new Error('Add at least one revenue or expense line');
+  }
+  if (wz.step === 3) [...wz.revenue, ...wz.expense].forEach(l => {
+    if (l.expected === '' || l.expected == null || isNaN(l.expected)) throw new Error(`Fill the expected amount for "${l.item}"`);
+    if (l.expected < 0) throw new Error('Amounts cannot be negative');
   });
-  html += `<tr class="total"><td>Total</td><td class="num">${money(tot.EGP)}</td><td class="num">${money(tot.USD, 'USD')}</td><td class="num">${money(tot.EUR, 'EUR')}</td><td class="num">${money(toEgp(tot, r))}</td></tr>`;
-  $('reserveTable').innerHTML = html;
-
-  $('reserveLog').innerHTML = '<tr><th>Date</th><th>LC</th><th class="num">Amount</th><th>Note</th><th></th></tr>' +
-    (INIT.reserves.length ? INIT.reserves.map(x =>
-      `<tr><td>${esc(x.date)}</td><td>${esc(x.lc)}</td><td class="num">${money(x.amount, x.currency)} ${esc(x.currency)}</td><td>${esc(x.note)}</td><td><button class="del" title="Delete" data-id="${esc(x.id)}">×</button></td></tr>`).join('')
-      : '<tr><td colspan="5" class="muted">No entries yet</td></tr>');
 }
 
-$('rSave').addEventListener('click', e => busy(e.target, async () => {
-  const data = { date: $('rDate').value, lc: $('rLc').value, currency: segValue('rCurrency'), amount: Number($('rAmount').value), note: $('rNote').value };
-  if (!confirm(`Add ${fmt(data.amount, 2)} ${data.currency} to ${data.lc}'s reserve?`)) return;
-  const res = await api('addReserve', data);
-  toast(res.masterWarning || `Added. ${data.lc} reserve updated and cash flow line created.`, !!res.masterWarning);
-  $('rAmount').value = ''; $('rNote').value = '';
-  await refreshInit();
-}));
-
-// ---------- Cash flow ----------
-function renderCashflow() {
-  const c = INIT.mcCash;
-  const tile = (label, value) => `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div></div>`;
-  $('cashTiles').innerHTML = tile('MC cash · EGP', money(c.EGP)) + tile('MC cash · USD', money(c.USD, 'USD')) + tile('MC cash · EUR', money(c.EUR, 'EUR'));
-  $('cashLog').innerHTML = '<tr><th>Date</th><th>Description</th><th class="num">Received</th><th class="num">Paid</th><th>Category</th><th></th></tr>' +
-    (INIT.cashflow.length ? INIT.cashflow.map(x => {
-      const amt = `${money(x.amount, x.currency)} ${esc(x.currency)}`;
-      return `<tr><td>${esc(x.date)}</td><td>${esc(x.description)}</td><td class="num">${x.type === 'Received' ? amt : ''}</td><td class="num">${x.type === 'Paid' ? amt : ''}</td><td class="small">${esc(x.incomeCat || x.expenseCat)}</td><td>${x.source === 'Reserve' ? '' : `<button class="del" title="Delete" data-id="${esc(x.id)}">×</button>`}</td></tr>`;
-    }).join('') : '<tr><td colspan="6" class="muted">No lines yet</td></tr>');
-  $('masterInfo').textContent = INIT.writeToMaster ? 'Each line is also copied into the Master Tool → [MAIN] Cashflow.' : 'Copy to Master Tool is OFF (turn it on in the Settings tab of the database sheet).';
-}
-
-$('cType').addEventListener('change', () => {
-  const paid = segValue('cType') === 'Paid';
-  $('cIncomeWrap').classList.toggle('hidden', paid);
-  $('cExpenseWrap').classList.toggle('hidden', !paid);
+$('wzBody').addEventListener('click', e => {
+  if (e.target.id === 'wzAdd') { wzCollect(); wz[wz.step === 1 ? 'revenue' : 'expense'].push({ item: '', gfb: '' }); wzRender(); }
+  if (e.target.dataset.del != null) { wzCollect(); wz[wz.step === 1 ? 'revenue' : 'expense'].splice(+e.target.dataset.del, 1); wzRender(); }
 });
-
-$('cSave').addEventListener('click', e => busy(e.target, async () => {
-  const data = { date: $('cDate').value, type: segValue('cType'), currency: segValue('cCurrency'), amount: Number($('cAmount').value),
-    description: $('cDesc').value, incomeCat: $('cIncome').value, expenseCat: $('cExpense').value };
-  const res = await api('addCashflow', data);
-  toast(res.masterWarning || 'Saved', !!res.masterWarning);
-  $('cAmount').value = ''; $('cDesc').value = '';
-  await refreshInit();
+$('wzBack').addEventListener('click', () => { wzCollect(); wz.step--; wzRender(); });
+$('wzNext').addEventListener('click', e => busy(e.target, async () => {
+  wzCollect(); wzValidate();
+  if (wz.step < 4) { wz.step++; wzRender(); return; }
+  const lines = wz.revenue.map(l => ({ type: 'Revenue', item: l.item, gfb: l.gfb, expected: l.expected }))
+    .concat(wz.expense.map(l => ({ type: 'Expense', item: l.item, gfb: l.gfb, expected: l.expected })));
+  const r = await api('createEvent', { name: wz.name, lines });
+  toast('Event created');
+  location.hash = 'event/' + encodeURIComponent(r.name);
 }));
 
-// Delete buttons (surplus + cash flow lists)
-document.addEventListener('click', e => {
-  if (!e.target.classList.contains('del')) return;
-  if (!confirm('Delete this entry from the CRM?')) return;
-  busy(e.target, async () => { const r = await api('deleteEntry', { id: e.target.dataset.id }); toast(INIT.writeToMaster ? r.note : 'Deleted'); await refreshInit(); });
-});
-
-async function refreshInit() { INIT = await api('init'); renderSurplus(); renderCashflow(); }
-
-// ---------- Income statement ----------
-async function loadIncome() {
-  $('isTable').innerHTML = '<tr><td class="muted">Loading…</td></tr>';
-  try {
-    const d = await api('incomeStatement');
-    const ms = d.months;
-    if (!ms.length) { $('isTable').innerHTML = '<tr><td class="muted">No cash flow lines yet</td></tr>'; return; }
-    const head = '<tr><th>Category</th>' + ms.map(m => `<th class="num">${monthName(m)}</th>`).join('') + '<th class="num">Total</th></tr>';
-    const section = (title, list, sign) => {
-      const sum = {}; let html = `<tr><td colspan="${ms.length + 2}"><b>${title}</b></td></tr>`;
-      list.forEach(row => {
-        let t = 0;
-        html += `<tr><td>${esc(row.category)}</td>` + ms.map(m => { const v = row.byMonth[m] || 0; t += v; sum[m] = (sum[m] || 0) + v; return `<td class="num">${v ? money(v) : ''}</td>`; }).join('') + `<td class="num">${money(t)}</td></tr>`;
-      });
-      const total = ms.reduce((s, m) => s + (sum[m] || 0), 0);
-      html += `<tr class="total"><td>Total ${title.toLowerCase()}</td>` + ms.map(m => `<td class="num">${money(sum[m] || 0)}</td>`).join('') + `<td class="num">${money(total)}</td></tr>`;
-      return { html, sum };
-    };
-    const inc = section('Income', d.income), exp = section('Expenses', d.expenses);
-    const net = '<tr class="total"><td>Net result</td>' + ms.map(m => `<td class="num">${money((inc.sum[m] || 0) - (exp.sum[m] || 0))}</td>`).join('') +
-      `<td class="num">${money(ms.reduce((s, m) => s + (inc.sum[m] || 0) - (exp.sum[m] || 0), 0))}</td></tr>`;
-    $('isTable').innerHTML = head + inc.html + exp.html + net;
-  } catch (err) { toast(err.message, true); }
+// ===================================================================== event detail
+let EV = null;
+async function loadEvent(name) {
+  $('evTitle').textContent = name;
+  $('evBudget').innerHTML = '<tr><td class="muted">Loading…</td></tr>'; $('evEntries').innerHTML = ''; $('evTiles').innerHTML = '';
+  try { EV = await api('getEvent', { name }); renderEvent(); }
+  catch (err) { toast(err.message, true); }
 }
 
-// ---------- Targets ----------
-const TARGET_FIELDS = {
-  surplus: ['', 'EGP to add to reserve'], ogv: ['count', 'EGP'], ogta: ['count', 'EGP'], ogte: ['count', 'EGP'],
-  igv: ['count', 'EGP'], igta: ['count', 'EGP'], igte: ['count', 'EGP'], tn: ['', 'EGP profit per EP'], bd: ['count', 'EGP'], conf: ['count', 'EGP'],
-};
-async function loadTargets() {
-  const lc = $('tLc').value, month = $('tMonth').value;
-  if (!lc || !month) return;
-  try {
-    const t = await api('getTargets', { lc, month });
-    $('tTable').innerHTML = '<tr><th>Category</th><th>Target count</th><th>Target money</th></tr>' + INIT.metrics.map(([k, label]) => {
-      const f = TARGET_FIELDS[k] || ['count', 'EGP'], v = t[k] || {};
-      return `<tr><td>${esc(label)}</td>
-        <td>${f[0] ? `<input type="number" min="0" data-k="${k}" data-f="count" value="${v.count || ''}">` : ''}</td>
-        <td><input type="number" min="0" data-k="${k}" data-f="amount" placeholder="${f[1]}" value="${v.amount || ''}"></td></tr>`;
-    }).join('');
-  } catch (err) { toast(err.message, true); }
+function renderEvent() {
+  const s = (type, f) => EV.lines.filter(l => l.type === type).reduce((a, l) => a + l[f], 0);
+  const er = s('Revenue', 'expected'), ar = s('Revenue', 'actual'), ee = s('Expense', 'expected'), ae = s('Expense', 'actual');
+  $('evTiles').innerHTML = tile('Revenue · actual / expected', `${fmt(ar)}`, `of ${fmt(er)} EGP`) +
+    tile('Expenses · actual / expected', `${fmt(ae)}`, `of ${fmt(ee)} EGP`) +
+    tile('Net · actual', money(ar - ae), `expected ${fmt(er - ee)} EGP`);
+
+  const rows = type => {
+    const list = EV.lines.filter(l => l.type === type);
+    if (!list.length) return '';
+    return `<tr class="group"><td colspan="5">${type === 'Revenue' ? 'Revenue' : 'Expenses'}</td></tr>` + list.map(l => {
+      const p = l.expected ? Math.min(100, l.actual / l.expected * 100) : (l.actual ? 100 : 0);
+      const over = type === 'Expense' && l.actual > l.expected;
+      const diff = l.actual - l.expected;
+      return `<tr><td><b>${esc(l.item)}</b><div class="small muted">${esc(short(l.gfb))}</div><div class="bar"><span class="${over ? 'over' : ''}" style="width:${p}%"></span></div></td>
+        <td class="num">${fmt(l.expected)}</td><td class="num">${fmt(l.actual)}</td>
+        <td class="num ${(type === 'Expense' ? diff > 0 : diff < 0) ? 'neg' : diff ? 'pos' : ''}">${diff > 0 ? '+' : ''}${fmt(diff)}</td></tr>`;
+    }).join('') + `<tr class="total"><td>Total</td><td class="num">${fmt(s(type, 'expected'))}</td><td class="num">${fmt(s(type, 'actual'))}</td><td class="num">${fmt(s(type, 'actual') - s(type, 'expected'))}</td></tr>`;
+  };
+  $('evBudget').innerHTML = '<tr><th>Item</th><th class="num">Expected</th><th class="num">Actual</th><th class="num">Difference</th></tr>' + rows('Revenue') + rows('Expense');
+
+  $('evEntries').innerHTML = '<tr><th>Date</th><th>Item</th><th>Description</th><th class="num">Amount</th><th class="num">EGP</th></tr>' +
+    (EV.entries.length ? EV.entries.map(x => `<tr><td class="small">${esc(x.date)}</td><td>${esc(x.item)} <span class="pill ${x.type === 'Revenue' ? 'good' : 'bad'}">${x.type}</span></td>
+      <td>${esc(x.description)}</td><td class="num">${fmt(x.amount, 2)} ${esc(x.currency)}</td><td class="num">${fmt(x.egp)}</td></tr>`).join('')
+      : '<tr><td colspan="5" class="muted">Nothing added yet</td></tr>');
+  fillEvItems();
+  fillElGfb();
 }
-$('tLc').addEventListener('change', loadTargets);
-$('tMonth').addEventListener('change', loadTargets);
-$('tSave').addEventListener('click', e => busy(e.target, async () => {
-  const targets = {};
-  $('tTable').querySelectorAll('input').forEach(i => { (targets[i.dataset.k] = targets[i.dataset.k] || {})[i.dataset.f] = Number(i.value) || 0; });
-  const r = await api('saveTargets', { lc: $('tLc').value, month: $('tMonth').value, targets });
-  toast(`Saved ${r.saved} targets for ${$('tLc').value}`);
+
+function fillEvItems() {
+  const type = segValue('evType');
+  const list = EV.lines.filter(l => l.type === type);
+  $('evItem').innerHTML = list.length ? list.map(l => `<option value="${esc(l.item)}">${esc(l.item)}</option>`).join('')
+    : `<option value="">No ${type.toLowerCase()} lines in this budget</option>`;
+}
+$('evType').addEventListener('change', fillEvItems);
+
+$('evSave').addEventListener('click', e => busy(e.target, async () => {
+  const data = { name: EV.name, date: $('evDate').value, type: segValue('evType'), item: $('evItem').value,
+    currency: segValue('evCurrency'), amount: Number($('evAmount').value), description: $('evDesc').value.trim() };
+  if (!data.date) throw new Error('Choose a date');
+  if (!data.item) throw new Error('Choose a budget line');
+  if (!(data.amount > 0)) throw new Error('Write an amount more than 0');
+  const r = await api('addEventEntry', data);
+  toast(`Saved in the event and in [MAIN] Cashflow (row ${r.mainRow})`);
+  $('evAmount').value = ''; $('evDesc').value = '';
+  EV = await api('getEvent', { name: EV.name }); renderEvent();
 }));
 
-// ---------- Settings ----------
-function renderSettings() {
-  $('settingsInfo').innerHTML = `<p>Connected to: <span class="muted small">${DEMO ? 'Demo data (nothing is saved)' : esc(store.get('crm_url'))}</span></p>
-    <p>Rates used for EGP totals: 1 USD = ${INIT.rates.USD} EGP · 1 EUR = ${INIT.rates.EUR} EGP</p>
-    <p>Copy each cash flow line to Master Tool: <b>${INIT.writeToMaster ? 'ON' : 'OFF'}</b></p>`;
+function fillElGfb() {
+  const rev = segValue('elType') === 'Revenue';
+  $('elGfb').innerHTML = catOptions(rev ? INIT.incomeCategories : INIT.expenseCategories, 'Choose GFB category');
 }
-$('disconnectBtn').addEventListener('click', () => { store.del('crm_url'); store.del('crm_key'); location.reload(); });
+$('elType').addEventListener('change', fillElGfb);
+$('evLineToggle').addEventListener('click', () => $('evLineForm').classList.toggle('hidden'));
+$('elSave').addEventListener('click', e => busy(e.target, async () => {
+  const data = { name: EV.name, type: segValue('elType'), item: $('elItem').value.trim(), gfb: $('elGfb').value, expected: Number($('elExpected').value) || 0 };
+  if (!data.item) throw new Error('Write a name');
+  if (!data.gfb) throw new Error('Choose a GFB category');
+  await api('addEventLine', data);
+  toast('Budget line added');
+  $('elItem').value = ''; $('elExpected').value = ''; $('evLineForm').classList.add('hidden');
+  EV = await api('getEvent', { name: EV.name }); renderEvent();
+}));
 
+// ===================================================================== connect
 $('connectBtn').addEventListener('click', () => {
   const url = $('apiUrl').value.trim(), key = $('apiKey').value.trim();
   if (!url.startsWith('https://script.google.com/')) return toast('The URL should start with https://script.google.com/', true);
   if (!key) return toast('Paste your API key', true);
-  store.set('crm_url', url); store.set('crm_key', key);
-  $('page-connect').classList.add('hidden'); start();
+  store.set('fin_url', url); store.set('fin_key', key);
+  start();
 });
-$('demoBtn').addEventListener('click', () => { DEMO = true; $('page-connect').classList.add('hidden'); start(); });
+$('demoBtn').addEventListener('click', () => { DEMO = true; start(); });
+$('disconnectBtn').addEventListener('click', () => { store.del('fin_url'); store.del('fin_key'); location.hash = ''; location.reload(); });
 
-// =====================================================================
-// 4) Demo data — lets you see the CRM before connecting Google
-// =====================================================================
+// ===================================================================== demo data (in memory only)
 const demo = (() => {
-  const lcs = ['6th October', 'Alexandria', 'CU', 'Mansoura', 'MUST', 'Zagazig'];
-  const rates = { EGP: 1, USD: 55.80, EUR: 62.48 };
-  const reserveOpening = { '6th October': { EGP: 412.15, USD: 9287.63, EUR: 1590 }, Alexandria: { EGP: 124127.04, USD: 6863.4, EUR: 1000 }, CU: { EGP: 236394.14, USD: 12163.19, EUR: 1265 },
-    Mansoura: { EGP: -92394.37, USD: 6064, EUR: 1050 }, MUST: { EGP: 148062.07, USD: 13381, EUR: 1232 }, Zagazig: { EGP: -39998.29, USD: 11038.6, EUR: 105 } };
-  const actuals = { // sample shaped like the real Zagazig numbers
-    '2026-09': { ogv: [8, 38000, 1], ogte: [5, 14150, 1], igte: [3, 3500], tn: [3, 6200], bd: [2, 9000], conf: [1, 3300], igv: [5, 3250] },
-    '2026-10': { ogv: [6, 28500], ogta: [2, 9000, 1], igv: [45, 5150, 39], tn: [4, 8800], bd: [3, 14000], conf: [2, 6600] },
-  };
-  const reserves = [], cashflow = [], targets = {};
-  const income = ['MC | Entity Affiliation Fee Revenue: Fixed Payment', 'MC | EwA Revenues: Entity EwA Initiatives Partner Fee', 'MC | Miscellaneous Revenue'];
-  const expense = ['MC | Overhead Costs: (Office)', 'MC | Overhead Costs: (HR)', 'MC | Overhead Costs: (Platforms)', 'MC | Miscellaneous Costs'];
-  const mcOpening = { EGP: 240454.1, USD: 100483, EUR: 48827 };
-  let n = 0;
-  const addCf = d => { const id = 'C-' + (++n); cashflow.push(Object.assign({ id, source: 'Manual' }, d)); return id; };
-  addCf({ date: '2026-10-05', type: 'Paid', currency: 'EGP', amount: 43850, description: 'Office rent', expenseCat: expense[0], incomeCat: '' });
-  addCf({ date: '2026-10-12', type: 'Received', currency: 'EGP', amount: 18000, description: 'BD - Global Village', incomeCat: income[1], expenseCat: '' });
-  const addRes = d => { const cid = addCf({ date: d.date, type: 'Received', currency: d.currency, amount: d.amount, description: 'Cash added to reserve - ' + d.lc, incomeCat: income[0], expenseCat: '', source: 'Reserve' });
-    reserves.push(Object.assign({ id: 'R-' + (++n), cashflowId: cid }, d)); };
-  addRes({ date: '2026-10-21', lc: 'Mansoura', currency: 'EGP', amount: 27950, note: '' });
-  addRes({ date: '2026-10-23', lc: 'Zagazig', currency: 'USD', amount: 165, note: '' });
-  addRes({ date: '2026-09-22', lc: 'Alexandria', currency: 'EGP', amount: 20000, note: '' });
-  targets['Zagazig|2026-10'] = { surplus: { count: 0, amount: 50000 }, ogv: { count: 10, amount: 47500 }, igv: { count: 8, amount: 5200 }, tn: { count: 0, amount: 2500 }, bd: { count: 4, amount: 15000 } };
-
-  const balances = () => { const b = JSON.parse(JSON.stringify(reserveOpening)); reserves.forEach(r => b[r.lc][r.currency] += r.amount); return b; };
-  const cash = () => { const c = Object.assign({}, mcOpening); cashflow.forEach(x => c[x.currency] += (x.type === 'Received' ? 1 : -1) * x.amount); return c; };
-  const metrics = [['surplus', 'Surplus to reserve'], ['ogv', 'oGV approvals'], ['ogta', 'oGTa approvals'], ['ogte', 'oGTe approvals'], ['igv', 'iGV slots'], ['igta', 'iGTa slots'], ['igte', 'iGTe slots'], ['tn', 'Profitability per EP (iGV TN fees)'], ['bd', 'BD deals'], ['conf', 'Local conferences (participant fees)']];
-  return { lcs, rates, actuals, reserves, cashflow, targets, income, expense, balances, cash, metrics, addCf, addRes };
+  const income = ['MC | Entity Affiliation Fee Revenue: Fixed Payment', 'MC | EwA Revenues: Entity EwA Initiatives Partner Fee',
+    'MC | Project Mgt Revenue: Conference and Meetings (National+Local) Participant Fee', 'MC | Project Mgt Revenue: Conference and Meetings (National+Local) Partner Fee', 'MC | Miscellaneous Revenue'];
+  const expense = ['MC | Overhead Costs: (Office)', 'MC | Overhead Costs: (HR)', 'MC | Project Mgt Costs: Conference and Meetings (National+Local)',
+    'MC | Project Mgt Costs: Partnership Logistics', 'MC | Miscellaneous Costs'];
+  const rates = { EGP: 1, USD: 49.5, EUR: 57.2 };
+  const opening = { EGP: 39787, USD: 91751, EUR: 54360 };
+  const main = [
+    { date: '2026-11-01', type: 'Expense', currency: 'EGP', amount: 42000, description: 'Office rent', category: expense[0] },
+    { date: '2026-11-02', type: 'Revenue', currency: 'EGP', amount: 50000, description: 'MUST cash added to reserve', category: income[0] },
+  ];
+  const events = {};
+  return { income, expense, rates, opening, main, events };
 })();
 
-async function demoApi(action, data) {
-  await new Promise(r => setTimeout(r, 150));
+async function demoApi(action, d) {
+  await new Promise(r => setTimeout(r, 120));
   const D = demo;
-  const sorted = list => list.slice().sort((a, b) => b.date.localeCompare(a.date));
-  if (action === 'init') return { lcs: D.lcs, incomeCategories: D.income, expenseCategories: D.expense, rates: D.rates, metrics: D.metrics,
-    reserveBalances: D.balances(), mcCash: D.cash(), reserves: sorted(D.reserves), cashflow: sorted(D.cashflow), lastSync: today(), writeToMaster: false };
-  if (action === 'addReserve') { if (!(data.amount > 0)) throw new Error('Amount must be more than 0'); D.addRes(data); return {}; }
-  if (action === 'addCashflow') {
-    if (!(data.amount > 0)) throw new Error('Amount must be more than 0');
-    if (!data.description.trim()) throw new Error('Write a description');
-    if (data.type === 'Received' && !data.incomeCat) throw new Error('Choose an income sub-category');
-    if (data.type === 'Paid' && !data.expenseCat) throw new Error('Choose an expense sub-category');
-    D.addCf(Object.assign({}, data, { incomeCat: data.type === 'Received' ? data.incomeCat : '', expenseCat: data.type === 'Paid' ? data.expenseCat : '' })); return {};
+  const addMain = x => {
+    if (!(x.amount > 0)) throw new Error('Amount must be more than 0');
+    D.main.push(Object.assign({}, x)); return D.main.length + 285;
+  };
+  if (action === 'init') return { incomeCategories: D.income, expenseCategories: D.expense, today: today() };
+  if (action === 'cashflow') {
+    const m = d.month || today().slice(0, 7);
+    const bal = Object.assign({}, D.opening);
+    D.main.filter(x => x.date.slice(0, 7) <= m).forEach(x => bal[x.currency] += (x.type === 'Revenue' ? 1 : -1) * x.amount);
+    return { month: m, balance: bal, lines: D.main.filter(x => x.date.slice(0, 7) === m).slice().reverse() };
   }
-  if (action === 'deleteEntry') {
-    const r = D.reserves.findIndex(x => x.id === data.id);
-    if (r >= 0) { const cid = D.reserves[r].cashflowId; D.reserves.splice(r, 1); D.cashflow.splice(D.cashflow.findIndex(x => x.id === cid), 1); }
-    else D.cashflow.splice(D.cashflow.findIndex(x => x.id === data.id), 1);
-    return { note: 'Deleted' };
+  if (action === 'addCashflow') return { row: addMain(d) };
+  if (action === 'listEvents') return Object.values(D.events).map(ev => {
+    const n = f => ev.lines.reduce((s, l) => s + (l.type === 'Revenue' ? 1 : -1) * l[f], 0);
+    return { name: ev.name, expectedNet: n('expected'), actualNet: n('actual') };
+  });
+  if (action === 'createEvent') {
+    if (D.events[d.name]) throw new Error('An event with this name already exists');
+    D.events[d.name] = { name: d.name, lines: d.lines.map(l => Object.assign({ actual: 0 }, l, { expected: Number(l.expected) || 0 })), entries: [] };
+    return { name: d.name };
   }
-  if (action === 'sync') return { rows: 40, errors: 0 };
-  if (action === 'getTargets') return D.targets[data.lc + '|' + data.month] || {};
-  if (action === 'saveTargets') { D.targets[data.lc + '|' + data.month] = data.targets; return { saved: Object.keys(data.targets).length }; }
-  if (action === 'incomeStatement') {
-    const months = [...new Set(D.cashflow.map(c => c.date.slice(0, 7)))].sort(); const inc = {}, exp = {};
-    D.cashflow.forEach(c => { const b = c.type === 'Received' ? inc : exp, cat = c.incomeCat || c.expenseCat, m = c.date.slice(0, 7);
-      b[cat] = b[cat] || {}; b[cat][m] = (b[cat][m] || 0) + c.amount * D.rates[c.currency]; });
-    const list = o => Object.keys(o).sort().map(k => ({ category: k, byMonth: o[k] }));
-    return { months, income: list(inc), expenses: list(exp) };
-  }
-  if (action === 'dashboard') {
-    const month = data.month || 'ALL';
-    const lcs = D.lcs.map((lc, i) => {
-      const actual = {}, target = {};
-      Object.keys(D.actuals).forEach(m => { if (month !== 'ALL' && m !== month) return;
-        Object.entries(D.actuals[m]).forEach(([k, [c, a, rf]]) => { const f = 1 - i * 0.12; const x = actual[k] = actual[k] || { count: 0, refunds: 0, amount: 0 }; x.count += Math.round(c * f); x.refunds += Math.round((rf || 0) * f); x.amount += Math.round(a * f); }); });
-      D.reserves.forEach(r => { if (r.lc !== lc || (month !== 'ALL' && r.date.slice(0, 7) !== month)) return;
-        const x = actual.surplus = actual.surplus || { count: 0, amount: 0 }; x.count++; x.amount += r.amount * D.rates[r.currency]; });
-      Object.entries(D.targets).forEach(([key, t]) => { const [tl, tm] = key.split('|'); if (tl !== lc || (month !== 'ALL' && tm !== month)) return;
-        Object.entries(t).forEach(([k, v]) => { const x = target[k] = target[k] || { count: 0, amount: 0 }; x.count += v.count || 0; x.amount += v.amount || 0; }); });
-      return { lc, actual, target };
-    });
-    return { month, months: ['2026-09', '2026-10'], lcs, reserveBalances: D.balances(), mcCash: D.cash(), rates: D.rates, lastSync: today() };
+  if (action === 'getEvent') { const ev = D.events[d.name]; if (!ev) throw new Error('Event not found'); return JSON.parse(JSON.stringify(ev)); }
+  if (action === 'addEventLine') { D.events[d.name].lines.push({ type: d.type, item: d.item, gfb: d.gfb, expected: d.expected, actual: 0 }); return {}; }
+  if (action === 'addEventEntry') {
+    const ev = D.events[d.name], line = ev.lines.find(l => l.type === d.type && l.item === d.item);
+    const row = addMain({ date: d.date, type: d.type, currency: d.currency, amount: d.amount, category: line.gfb, description: `${d.name} | ${line.item}${d.description ? ' | ' + d.description : ''}` });
+    const egp = d.amount * D.rates[d.currency];
+    line.actual += egp;
+    ev.entries.unshift({ date: d.date, type: d.type, item: d.item, gfb: line.gfb, currency: d.currency, amount: d.amount, egp, description: d.description });
+    return { mainRow: row };
   }
   throw new Error('Unknown action');
 }
 
-// =====================================================================
-// 5) Start
-// =====================================================================
-if (store.get('crm_url') && store.get('crm_key')) start();
-else $('page-connect').classList.remove('hidden');
+// ===================================================================== start
+if (store.get('fin_url') && store.get('fin_key')) start();
+else show('connect');
 </script>
 </body>
 </html>
