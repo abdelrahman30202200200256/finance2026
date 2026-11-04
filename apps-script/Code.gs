@@ -1,30 +1,25 @@
 /**
- * AIESEC Egypt Finance website — Google Apps Script connector.
+ * AIESEC Egypt Finance website — Google Apps Script connector (general version).
  *
- * Paste this whole file into the "finance" Google Sheet:
+ * This connector only does three things: login, reading the sheet, writing the sheet.
+ * All the finance logic lives in the website, so new features do NOT need this code to change.
+ *
+ * Install / update:
  *   Extensions → Apps Script → replace everything in Code.gs → Save.
- * Then: Deploy → New deployment → type "Web app",
- *   Execute as: Me,  Who has access: Anyone  → Deploy → copy the Web app URL.
- *   (Updating later: Deploy → Manage deployments → ✏️ → Version: New version → Deploy. The URL stays the same.)
+ *   Deploy → Manage deployments → ✏️ → Version: New version → Deploy. (First time: Deploy → New deployment →
+ *   Web app, Execute as: Me, Who has access: Anyone.)
  *
- * People log in to the website with a username + password.
- * Add people from the sheet menu: Finance website → Add or change a user.
- * Remove someone by deleting their row in the "Users" tab.
+ * People log in with a username + password: sheet menu Finance website → Add or change a user.
+ * Remove someone by deleting their row in the "Users" tab. The website can never read or change the "Users" tab.
  */
 
-const MAIN = '[MAIN] Cashflow';
-const IS = '[NEW] Income Statement';
-const EVENT_PREFIX = '[EVENT] ';
 const USERS = 'Users';
 const SESSION_DAYS = 7;
-
-// Columns in [MAIN] Cashflow (1 = A)
-const C = { date: 4, paidEGP: 5, paidUSD: 7, paidEUR: 8, recEGP: 9, recUSD: 10, recEUR: 11,
-  desc: 12, pettyBank: 13, incomeCat: 14, expenseCat: 15, receipt: 16, channel: 17, notes: 18 };
+const VERSION = 2;
 
 // ---------------------------------------------------------------- web entry
 function doGet() {
-  return ContentService.createTextOutput('Finance website connector is running.');
+  return ContentService.createTextOutput('Finance website connector is running (version ' + VERSION + ').');
 }
 
 function doPost(e) {
@@ -44,23 +39,102 @@ function doPost(e) {
 }
 
 function route_(action, d, user) {
-  switch (action) {
-    case 'init': return Object.assign(init_(), { user: user });
-    case 'cashflow': return cashflow_(d.month);
-    case 'addCashflow': return withLock_(() => addCashflow_(d, user));
-    case 'listEvents': return listEvents_();
-    case 'createEvent': return withLock_(() => createEvent_(d));
-    case 'getEvent': return getEvent_(d.name);
-    case 'addEventEntry': return withLock_(() => addEventEntry_(d));
-    case 'addEventLine': return withLock_(() => addEventLine_(d));
-  }
+  if (action === 'meta') return meta_(user);
+  if (action === 'read') return read_(d.ranges || []);
+  if (action === 'write') return withLock_(() => write_(d.ops || []));
   throw new Error('Unknown action: ' + action);
 }
 
 function withLock_(fn) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
-  try { return fn(); } finally { lock.releaseLock(); }
+  try { const r = fn(); SpreadsheetApp.flush(); return r; } finally { lock.releaseLock(); }
+}
+
+// ---------------------------------------------------------------- general sheet access
+const ss_ = () => SpreadsheetApp.getActiveSpreadsheet();
+const tz_ = () => ss_().getSpreadsheetTimeZone();
+
+function guard_(sheet) {
+  if (!sheet) throw new Error('Tab not found');
+  if (sheet.getName() === USERS) throw new Error('The Users tab cannot be used from the website');
+  return sheet;
+}
+function sheet_(name) { return guard_(ss_().getSheetByName(name)); }
+function range_(a1) { const r = ss_().getRange(a1); guard_(r.getSheet()); return r; }
+
+// Dates travel as {d: "yyyy-MM-dd"} both ways.
+function out_(v) { return v instanceof Date ? { d: Utilities.formatDate(v, tz_(), 'yyyy-MM-dd') } : v; }
+function in_(v) {
+  if (v && typeof v === 'object' && typeof v.d === 'string') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v.d);
+    if (!m) throw new Error('Bad date');
+    return new Date(+m[1], +m[2] - 1, +m[3]);
+  }
+  return v;
+}
+function rowsIn_(values, row) {
+  return values.map(r => r.map(v => (typeof v === 'string' && row) ? v.replace(/\{r\}/g, row) : in_(v)));
+}
+
+function meta_(user) {
+  return {
+    user: user, version: VERSION, today: Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'),
+    sheets: ss_().getSheets().filter(s => s.getName() !== USERS).map(s => ({ name: s.getName(), rows: s.getLastRow(), cols: s.getLastColumn(), maxRows: s.getMaxRows() })),
+  };
+}
+
+function read_(ranges) {
+  return ranges.map(a1 => range_(a1).getValues().map(r => r.map(out_)));
+}
+
+/**
+ * Runs write operations in order, all under one lock.
+ *  {op:'set', range, values}                       write values / formulas (strings starting with "=")
+ *  {op:'putNextRow', sheet, from, to, scanFrom, scanTo, col, values}
+ *        finds the first free row after the last used row between rows from..to (looking at columns scanFrom..scanTo)
+ *        and writes `values` there starting at column `col`. "{r}" inside values becomes the row number.
+ *  {op:'clear', range}
+ *  {op:'format', range, numberFormat, bold, background, fontSize}
+ *  {op:'addSheet', name}   {op:'insertColumns', sheet, before, count}
+ *  {op:'freeze', sheet, rows}   {op:'colWidth', sheet, col, px}
+ */
+function write_(ops) {
+  return ops.map(o => {
+    switch (o.op) {
+      case 'set': { const r = range_(o.range); r.setValues(rowsIn_(o.values, r.getRow())); return {}; }
+      case 'putNextRow': {
+        const sh = sheet_(o.sheet);
+        const n = o.to - o.from + 1;
+        const scan = sh.getRange(o.from, o.scanFrom, n, o.scanTo - o.scanFrom + 1).getValues();
+        let last = -1;
+        for (let i = n - 1; i >= 0; i--) if (scan[i].some(v => v !== '' && v !== null)) { last = i; break; }
+        const row = o.from + last + 1;
+        if (row > o.to) throw new Error('No free row left in this part of "' + o.sheet + '". Add rows in the sheet first.');
+        const vals = rowsIn_([o.values], row);
+        sh.getRange(row, o.col, 1, vals[0].length).setValues(vals);
+        return { row: row };
+      }
+      case 'clear': range_(o.range).clearContent(); return {};
+      case 'format': {
+        const r = range_(o.range);
+        if (o.numberFormat) r.setNumberFormat(o.numberFormat);
+        if (o.bold != null) r.setFontWeight(o.bold ? 'bold' : 'normal');
+        if (o.background !== undefined) r.setBackground(o.background);
+        if (o.fontSize) r.setFontSize(o.fontSize);
+        return {};
+      }
+      case 'addSheet': {
+        if (o.name === USERS) throw new Error('Name not allowed');
+        if (ss_().getSheetByName(o.name)) throw new Error('A tab with this name already exists');
+        ss_().insertSheet(o.name); return {};
+      }
+      case 'insertColumns': sheet_(o.sheet).insertColumnsBefore(o.before, o.count); return {};
+      case 'freeze': sheet_(o.sheet).setFrozenRows(o.rows); return {};
+      case 'colWidth': sheet_(o.sheet).setColumnWidth(o.col, o.px); return {};
+    }
+    throw new Error('Unknown write: ' + o.op);
+  });
 }
 
 // ---------------------------------------------------------------- login
@@ -173,267 +247,4 @@ function logoutEveryone() {
   const p = PropertiesService.getScriptProperties();
   Object.keys(p.getProperties()).forEach(k => { if (k.indexOf('s_') === 0) p.deleteProperty(k); });
   SpreadsheetApp.getUi().alert('Everyone is logged out of the website.');
-}
-
-// ---------------------------------------------------------------- helpers
-const ss_ = () => SpreadsheetApp.getActiveSpreadsheet();
-const sheet_ = name => { const s = ss_().getSheetByName(name); if (!s) throw new Error('Tab not found: ' + name); return s; };
-const tz_ = () => ss_().getSpreadsheetTimeZone();
-const ymd_ = d => d instanceof Date ? Utilities.formatDate(d, tz_(), 'yyyy-MM-dd') : '';
-const num_ = v => (typeof v === 'number' ? v : Number(String(v).replace(/,/g, ''))) || 0;
-const parseDate_ = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); if (!m) throw new Error('Choose a date'); return new Date(+m[1], +m[2] - 1, +m[3]); };
-
-function categories_() {
-  const v = sheet_(IS).getRange(1, 3, 140, 2).getValues(); // C = code, D = name
-  const income = [], expense = [];
-  v.forEach(([code, name]) => {
-    name = String(name).trim();
-    if (!name.startsWith('MC |')) return;
-    if (/-RV-/.test(code)) income.push(name); else if (/-CO-/.test(code)) expense.push(name);
-  });
-  return { income, expense };
-}
-
-/** Month sections of [MAIN] Cashflow: each starts with a date in column L. */
-function blocks_() {
-  const sh = sheet_(MAIN);
-  const last = sh.getLastRow();
-  const vals = sh.getRange(1, 12, last, 2).getValues(); // L, M
-  const starts = [];
-  vals.forEach((r, i) => { if (r[0] instanceof Date) starts.push({ row: i + 1, month: r[0].getMonth() }); });
-  return starts.map((b, i) => {
-    let usdRow = 0, eurRow = 0;
-    for (let r = b.row; r < b.row + 8 && r <= last; r++) {
-      const label = String(vals[r - 1][0]).toLowerCase();
-      if (label.indexOf('usd') >= 0 && label.indexOf('rate') >= 0) usdRow = r;
-      if (label.indexOf('euro') >= 0 && label.indexOf('rate') >= 0) eurRow = r;
-    }
-    const first = (eurRow || b.row + 4) + 1;
-    const end = i + 1 < starts.length ? starts[i + 1].row - 1 : first + 145;
-    return { month: b.month, first, end, usdRow, eurRow };
-  });
-}
-
-function blockFor_(date) {
-  const b = blocks_().filter(x => x.month === date.getMonth())[0];
-  if (!b) throw new Error('No month section in ' + MAIN + ' for ' + Utilities.formatDate(date, tz_(), 'MMMM'));
-  return b;
-}
-
-function rates_(b) {
-  const sh = sheet_(MAIN);
-  const usd = b.usdRow ? num_(sh.getRange(b.usdRow, 13).getValue()) : 0;
-  const eur = b.eurRow ? num_(sh.getRange(b.eurRow, 13).getValue()) : 0;
-  return { EGP: 1, USD: usd, EUR: eur };
-}
-
-/** Last row inside a month section that has anything in D..R (0 if none). */
-function lastUsedRow_(b) {
-  const vals = sheet_(MAIN).getRange(b.first, C.date, b.end - b.first + 1, C.notes - C.date + 1).getValues();
-  for (let i = vals.length - 1; i >= 0; i--) if (vals[i].some(v => v !== '' && v !== null)) return b.first + i;
-  return 0;
-}
-
-// ---------------------------------------------------------------- main cash flow
-function init_() {
-  const cats = categories_();
-  return { incomeCategories: cats.income, expenseCategories: cats.expense, today: ymd_(new Date()) };
-}
-
-function cashflow_(month) {
-  const date = month ? parseDate_(month + '-01') : new Date();
-  const b = blockFor_(date);
-  const sh = sheet_(MAIN);
-  const used = lastUsedRow_(b);
-  const lines = [];
-  if (used) {
-    const vals = sh.getRange(b.first, 1, used - b.first + 1, C.notes).getValues();
-    vals.forEach((r, i) => {
-      const paid = { EGP: num_(r[C.paidEGP - 1]), USD: num_(r[C.paidUSD - 1]), EUR: num_(r[C.paidEUR - 1]) };
-      const rec = { EGP: num_(r[C.recEGP - 1]), USD: num_(r[C.recUSD - 1]), EUR: num_(r[C.recEUR - 1]) };
-      ['EGP', 'USD', 'EUR'].forEach(cur => {
-        if (paid[cur]) lines.push({ row: b.first + i, date: ymd_(r[C.date - 1]), type: 'Expense', currency: cur, amount: paid[cur], description: String(r[C.desc - 1]), category: String(r[C.expenseCat - 1]) });
-        if (rec[cur]) lines.push({ row: b.first + i, date: ymd_(r[C.date - 1]), type: 'Revenue', currency: cur, amount: rec[cur], description: String(r[C.desc - 1]), category: String(r[C.incomeCat - 1]) });
-      });
-    });
-  }
-  const balRow = (used || b.first - 1) + 1;
-  const bal = sh.getRange(balRow, 1, 1, 3).getValues()[0];
-  return { month: Utilities.formatDate(date, tz_(), 'yyyy-MM'), balance: { EGP: num_(bal[0]), USD: num_(bal[1]), EUR: num_(bal[2]) }, lines: lines.reverse() };
-}
-
-/** Writes one line into the right month of [MAIN] Cashflow. */
-function writeMain_(d) {
-  const date = parseDate_(d.date);
-  const amount = num_(d.amount);
-  if (!(amount > 0)) throw new Error('Amount must be more than 0');
-  if (['EGP', 'USD', 'EUR'].indexOf(d.currency) < 0) throw new Error('Choose a currency');
-  if (d.type !== 'Revenue' && d.type !== 'Expense') throw new Error('Choose Revenue or Expense');
-  const cats = categories_();
-  if ((d.type === 'Revenue' ? cats.income : cats.expense).indexOf(d.category) < 0) throw new Error('Choose a category');
-
-  const b = blockFor_(date);
-  const used = lastUsedRow_(b);
-  const row = used ? used + 1 : b.first;
-  if (row > b.end) throw new Error('The ' + Utilities.formatDate(date, tz_(), 'MMMM') + ' section of the sheet is full. Add rows there first.');
-
-  const sh = sheet_(MAIN);
-  const colMap = d.type === 'Expense' ? { EGP: C.paidEGP, USD: C.paidUSD, EUR: C.paidEUR } : { EGP: C.recEGP, USD: C.recUSD, EUR: C.recEUR };
-  sh.getRange(row, C.date).setValue(date);
-  sh.getRange(row, colMap[d.currency]).setValue(amount);
-  sh.getRange(row, C.desc).setValue(d.description || '');
-  sh.getRange(row, d.type === 'Revenue' ? C.incomeCat : C.expenseCat).setValue(d.category);
-  sh.getRange(row, C.notes).setValue(d.note || 'Added from website');
-  return { row, rates: rates_(b) };
-}
-
-function addCashflow_(d, user) {
-  if (!String(d.description || '').trim()) throw new Error('Write a description');
-  const r = writeMain_(Object.assign({}, d, { note: 'Added from website by ' + user }));
-  return { row: r.row };
-}
-
-// ---------------------------------------------------------------- events
-// Each event has its OWN cash flow. Nothing is written to [MAIN] Cashflow.
-// Event tab layout:
-//   A1 title, row 2 net summary (E2 budgeted, F2 actual, G2 difference)
-//   Budget (row 4 headers, rows 5+):  A Type | B Item | C Units | D Amount per unit (EGP) | E Budgeted (=C×D) | F Actual (EGP) | G Difference
-//   Event cash flow (rows 5+):        I Date | J Type | K Item | L Currency | M Amount | N EGP equivalent | O Description
-const EV_FIRST = 5;
-const FLOW_COL = 9; // column I
-
-function eventSheet_(name) {
-  const sh = ss_().getSheetByName(EVENT_PREFIX + name);
-  if (!sh) throw new Error('Event not found: ' + name);
-  upgradeEvent_(sh);
-  return sh;
-}
-
-/** Event tabs made before "units × amount" existed: add the Units and Amount columns (old amount = 1 unit × amount). */
-function upgradeEvent_(sh) {
-  if (String(sh.getRange('C4').getValue()).indexOf('Expected') !== 0) return;
-  sh.insertColumnsBefore(3, 2); // formulas that point to the old columns move with them
-  const last = sh.getLastRow();
-  if (last >= EV_FIRST) {
-    const vals = sh.getRange(EV_FIRST, 1, last - EV_FIRST + 1, 5).getValues();
-    vals.forEach((r, i) => {
-      if (r[1] === '') return;
-      const row = EV_FIRST + i;
-      sh.getRange(row, 3, 1, 2).setValues([[1, num_(r[4])]]);
-      sh.getRange(row, 5).setFormula(`=C${row}*D${row}`);
-    });
-  }
-  sh.getRange('C4:G4').setValues([['Units', 'Amount per unit (EGP)', 'Budgeted (EGP)', 'Actual (EGP)', 'Difference']]).setFontWeight('bold').setBackground('#e8f1fd');
-  sh.getRange('C2:D2').clearContent();
-  sh.getRange(EV_FIRST, 3, Math.max(last - EV_FIRST + 1, 1), 1).setNumberFormat('#,##0.##');
-}
-
-function cleanName_(name) {
-  name = String(name || '').replace(/[\[\]\*\?\/\\:]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!name) throw new Error('Write the event name');
-  if (name.length > 80) throw new Error('Event name is too long');
-  return name;
-}
-
-function checkLines_(lines) {
-  const seen = {};
-  lines.forEach(l => {
-    l.item = String(l.item || '').trim();
-    if (!l.item) throw new Error('Every line needs a name');
-    if (l.type !== 'Revenue' && l.type !== 'Expense') throw new Error('Bad line type');
-    const key = l.type + '|' + l.item.toLowerCase();
-    if (seen[key]) throw new Error('"' + l.item + '" is listed twice');
-    seen[key] = true;
-    l.units = l.units === '' || l.units == null ? 1 : num_(l.units);
-    l.amount = num_(l.amount);
-    if (!(l.units > 0)) throw new Error('Units for "' + l.item + '" must be more than 0');
-    if (l.amount < 0) throw new Error('Amount for "' + l.item + '" cannot be negative');
-  });
-}
-
-function budgetRow_(sh, r, l) {
-  sh.getRange(r, 1, 1, 4).setValues([[l.type, l.item, l.units, l.amount]]);
-  sh.getRange(r, 5).setFormula(`=C${r}*D${r}`);
-  sh.getRange(r, 6).setFormula(`=SUMIFS($N$${EV_FIRST}:$N,$J$${EV_FIRST}:$J,A${r},$K$${EV_FIRST}:$K,B${r})`);
-  sh.getRange(r, 7).setFormula(`=F${r}-E${r}`);
-  sh.getRange(r, 3).setNumberFormat('#,##0.##');
-  sh.getRange(r, 4, 1, 4).setNumberFormat('#,##0.00');
-}
-
-function createEvent_(d) {
-  const name = cleanName_(d.name);
-  if (ss_().getSheetByName(EVENT_PREFIX + name)) throw new Error('An event with this name already exists');
-  const lines = d.lines || [];
-  if (!lines.length) throw new Error('Add at least one revenue or expense line');
-  checkLines_(lines);
-
-  const sh = ss_().insertSheet(EVENT_PREFIX + name);
-  sh.getRange('A1').setValue('Event: ' + name).setFontSize(14).setFontWeight('bold');
-  sh.getRange('A2').setValue('Net (revenue − expenses)');
-  const net = col => `=SUMIF($A$${EV_FIRST}:$A,"Revenue",${col}$${EV_FIRST}:${col})-SUMIF($A$${EV_FIRST}:$A,"Expense",${col}$${EV_FIRST}:${col})`;
-  sh.getRange('E2').setFormula(net('E'));
-  sh.getRange('F2').setFormula(net('F'));
-  sh.getRange('G2').setFormula('=F2-E2');
-  sh.getRange('E2:G2').setNumberFormat('#,##0.00').setFontWeight('bold');
-  sh.getRange('A3').setValue('BUDGET (EGP)').setFontWeight('bold');
-  sh.getRange('I3').setValue('EVENT CASH FLOW').setFontWeight('bold');
-  sh.getRange('A4:G4').setValues([['Type', 'Item', 'Units', 'Amount per unit (EGP)', 'Budgeted (EGP)', 'Actual (EGP)', 'Difference']]);
-  sh.getRange('I4:O4').setValues([['Date', 'Type', 'Item', 'Currency', 'Amount', 'EGP equivalent', 'Description']]);
-  sh.getRange('A4:G4').setFontWeight('bold').setBackground('#e8f1fd');
-  sh.getRange('I4:O4').setFontWeight('bold').setBackground('#e8f1fd');
-  const sorted = lines.filter(l => l.type === 'Revenue').concat(lines.filter(l => l.type === 'Expense'));
-  sorted.forEach((l, i) => budgetRow_(sh, EV_FIRST + i, l));
-  sh.setFrozenRows(4);
-  sh.setColumnWidth(2, 180); sh.setColumnWidth(11, 180); sh.setColumnWidth(15, 240);
-  return { name };
-}
-
-function addEventLine_(d) {
-  const sh = eventSheet_(d.name);
-  const ev = getEvent_(d.name);
-  const l = { type: d.type, item: d.item, units: d.units, amount: d.amount };
-  checkLines_(ev.lines.map(x => ({ type: x.type, item: x.item, units: x.units, amount: x.amount })).concat([l]));
-  budgetRow_(sh, EV_FIRST + ev.lines.length, l);
-  return {};
-}
-
-function listEvents_() {
-  return ss_().getSheets().map(s => s.getName()).filter(n => n.indexOf(EVENT_PREFIX) === 0).map(n => {
-    const sh = ss_().getSheetByName(n);
-    upgradeEvent_(sh);
-    const v = sh.getRange('E2:F2').getValues()[0];
-    return { name: n.slice(EVENT_PREFIX.length), budgetedNet: num_(v[0]), actualNet: num_(v[1]) };
-  });
-}
-
-function getEvent_(name) {
-  const sh = eventSheet_(name);
-  const last = Math.max(sh.getLastRow(), EV_FIRST);
-  const budget = sh.getRange(EV_FIRST, 1, last - EV_FIRST + 1, 4).getValues().filter(r => r[1] !== '');
-  const flow = sh.getRange(EV_FIRST, FLOW_COL, last - EV_FIRST + 1, 7).getValues().filter(r => r[2] !== '');
-  const entries = flow.map(r => ({ date: ymd_(r[0]), type: r[1], item: r[2], currency: r[3], amount: num_(r[4]), egp: num_(r[5]), description: String(r[6]) }));
-  const lines = budget.map(r => {
-    const actual = entries.filter(e => e.type === r[0] && e.item === r[1]).reduce((s, e) => s + e.egp, 0);
-    const units = num_(r[2]), amount = num_(r[3]);
-    return { type: r[0], item: r[1], units, amount, budgeted: units * amount, actual };
-  });
-  return { name, lines, entries: entries.reverse() };
-}
-
-function addEventEntry_(d) {
-  const sh = eventSheet_(d.name);
-  const ev = getEvent_(d.name);
-  const line = ev.lines.filter(l => l.type === d.type && l.item === d.item)[0];
-  if (!line) throw new Error('Choose a budget line');
-  const date = parseDate_(d.date);
-  const amount = num_(d.amount);
-  if (!(amount > 0)) throw new Error('Amount must be more than 0');
-  if (['EGP', 'USD', 'EUR'].indexOf(d.currency) < 0) throw new Error('Choose a currency');
-  // The exchange rate is only READ from that month's rates in [MAIN] Cashflow.
-  const rate = d.currency === 'EGP' ? 1 : rates_(blockFor_(date))[d.currency];
-  if (!rate) throw new Error('No exchange rate for ' + d.currency + ' in the sheet');
-  const row = EV_FIRST + ev.entries.length;
-  sh.getRange(row, FLOW_COL, 1, 7).setValues([[date, d.type, line.item, d.currency, amount, amount * rate, String(d.description || '').trim()]]);
-  sh.getRange(row, FLOW_COL + 4, 1, 2).setNumberFormat('#,##0.00');
-  return { row };
 }

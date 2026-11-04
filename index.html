@@ -311,13 +311,14 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-// The Google Apps Script web app of the "finance" sheet. Every request except login needs a valid login.
+// The Google Apps Script web app of the "finance" sheet. It only does login + read + write;
+// all the finance logic below runs here in the website.
 const SERVER_URL = '';
 const serverUrl = () => SERVER_URL || store.get('fin_url') || '';
 let DEMO = new URLSearchParams(location.search).has('demo');
 
-async function api(action, data) {
-  if (DEMO) return demoApi(action, data || {});
+async function rpc(action, data) {
+  if (DEMO) return demoRpc(action, data || {});
   let json;
   try {
     const res = await fetch(serverUrl(), {
@@ -329,9 +330,241 @@ async function api(action, data) {
   } catch (e) { throw new Error('Cannot reach the finance sheet. Check your internet and try again.'); }
   if (!json.ok) {
     if (json.loginNeeded && action !== 'login') { showLogin(json.error); throw new Error(json.error); }
+    if (/Unknown action|Wrong API key/.test(json.error || '')) throw new Error('The connector in the finance sheet is an old version. Paste the latest Code.gs into Extensions → Apps Script and deploy a new version.');
     throw new Error(json.error || 'Something went wrong');
   }
   return json.data;
+}
+
+async function api(action, data) {
+  if (action === 'login') return rpc('login', data);
+  if (!LOGIC[action]) throw new Error('Unknown action: ' + action);
+  return LOGIC[action](data || {});
+}
+
+// ===================================================================== finance logic (runs in the browser)
+const MAIN = '[MAIN] Cashflow', IS = '[NEW] Income Statement', EVENT_PREFIX = '[EVENT] ';
+const C = { date: 4, paidEGP: 5, paidUSD: 7, paidEUR: 8, recEGP: 9, recUSD: 10, recEUR: 11, desc: 12, incomeCat: 14, expenseCat: 15, notes: 18 };
+const EV_FIRST = 5, FLOW_COL = 9; // event tabs: budget A..G, cash flow I..O
+let META = null, CATS = null;
+
+const q = name => "'" + String(name).replace(/'/g, "''") + "'";
+const colL = n => { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+const A1 = (sheet, r1, c1, r2, c2) => `${q(sheet)}!${colL(c1)}${r1}` + (r2 ? `:${colL(c2)}${r2}` : '');
+const num = v => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/,/g, ''))) || 0;
+const isDate = v => v && typeof v === 'object' && typeof v.d === 'string';
+const ymd = v => isDate(v) ? v.d : '';
+const filled = v => v !== '' && v !== null && v !== undefined;
+const sheetInfo = name => (META.sheets || []).find(s => s.name === name);
+async function read(...ranges) { return rpc('read', { ranges }); }
+async function write(ops) { return rpc('write', { ops }); }
+async function refreshMeta() { META = await rpc('meta'); return META; }
+
+const LOGIC = {
+  async init() {
+    await refreshMeta();
+    if (!META.version) throw new Error('The connector in the finance sheet is an old version. Paste the latest Code.gs and deploy a new version.');
+    const [is] = await read(A1(IS, 1, 3, 140, 4));
+    const income = [], expense = [];
+    is.forEach(([code, name]) => {
+      name = String(name).trim();
+      if (!name.startsWith('MC |')) return;
+      if (/-RV-/.test(code)) income.push(name); else if (/-CO-/.test(code)) expense.push(name);
+    });
+    CATS = { income, expense };
+    return { incomeCategories: income, expenseCategories: expense, today: META.today, user: META.user };
+  },
+
+  async cashflow(d) {
+    const b = await blockFor((d.month || META.today.slice(0, 7)) + '-01');
+    const [rows] = await read(A1(MAIN, b.first, 1, b.end + 1, C.notes));
+    let used = -1;
+    for (let i = b.end - b.first; i >= 0; i--) if (rows[i].slice(C.date - 1).some(filled)) { used = i; break; }
+    const lines = [];
+    for (let i = 0; i <= used; i++) {
+      const r = rows[i];
+      const paid = { EGP: num(r[C.paidEGP - 1]), USD: num(r[C.paidUSD - 1]), EUR: num(r[C.paidEUR - 1]) };
+      const rec = { EGP: num(r[C.recEGP - 1]), USD: num(r[C.recUSD - 1]), EUR: num(r[C.recEUR - 1]) };
+      ['EGP', 'USD', 'EUR'].forEach(cur => {
+        if (paid[cur]) lines.push({ date: ymd(r[C.date - 1]), type: 'Expense', currency: cur, amount: paid[cur], description: String(r[C.desc - 1]), category: String(r[C.expenseCat - 1]) });
+        if (rec[cur]) lines.push({ date: ymd(r[C.date - 1]), type: 'Revenue', currency: cur, amount: rec[cur], description: String(r[C.desc - 1]), category: String(r[C.incomeCat - 1]) });
+      });
+    }
+    const bal = rows[used + 1] || [];
+    return { month: d.month || META.today.slice(0, 7), balance: { EGP: num(bal[0]), USD: num(bal[1]), EUR: num(bal[2]) }, lines: lines.reverse() };
+  },
+
+  async addCashflow(d) {
+    const amount = num(d.amount);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date || '')) throw new Error('Choose a date');
+    if (!(amount > 0)) throw new Error('Amount must be more than 0');
+    if (!['EGP', 'USD', 'EUR'].includes(d.currency)) throw new Error('Choose a currency');
+    if (d.type !== 'Revenue' && d.type !== 'Expense') throw new Error('Choose Revenue or Expense');
+    if (!(d.type === 'Revenue' ? CATS.income : CATS.expense).includes(d.category)) throw new Error('Choose a category');
+    if (!String(d.description || '').trim()) throw new Error('Write a description');
+    const b = await blockFor(d.date);
+    const values = new Array(C.notes - C.date + 1).fill('');
+    const put = (col, v) => { values[col - C.date] = v; };
+    const col = d.type === 'Expense' ? { EGP: C.paidEGP, USD: C.paidUSD, EUR: C.paidEUR } : { EGP: C.recEGP, USD: C.recUSD, EUR: C.recEUR };
+    put(C.date, { d: d.date }); put(col[d.currency], amount); put(C.desc, d.description.trim());
+    put(d.type === 'Revenue' ? C.incomeCat : C.expenseCat, d.category);
+    put(C.notes, 'Added from website by ' + META.user);
+    const [r] = await write([{ op: 'putNextRow', sheet: MAIN, from: b.first, to: b.end, scanFrom: C.date, scanTo: C.notes, col: C.date, values }]);
+    return { row: r.row };
+  },
+
+  async listEvents() {
+    await refreshMeta();
+    const names = META.sheets.filter(s => s.name.startsWith(EVENT_PREFIX)).map(s => s.name.slice(EVENT_PREFIX.length));
+    const evs = await Promise.all(names.map(n => loadEvent_(n)));
+    const net = (ev, f) => ev.lines.reduce((s, l) => s + (l.type === 'Revenue' ? 1 : -1) * l[f], 0);
+    return evs.map(ev => ({ name: ev.name, budgetedNet: net(ev, 'budgeted'), actualNet: net(ev, 'actual') }));
+  },
+
+  async getEvent(d) { await refreshMeta(); return loadEvent_(d.name); },
+
+  async createEvent(d) {
+    const name = String(d.name || '').replace(/[\[\]\*\?\/\\:]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!name) throw new Error('Write the event name');
+    if (name.length > 80) throw new Error('Event name is too long');
+    await refreshMeta();
+    const tab = EVENT_PREFIX + name;
+    if (sheetInfo(tab)) throw new Error('An event with this name already exists');
+    const lines = checkLines(d.lines || []);
+    if (!lines.length) throw new Error('Add at least one revenue or expense line');
+    const sorted = lines.filter(l => l.type === 'Revenue').concat(lines.filter(l => l.type === 'Expense'));
+    const net = c => `=SUMIF($A$${EV_FIRST}:$A,"Revenue",${c}$${EV_FIRST}:${c})-SUMIF($A$${EV_FIRST}:$A,"Expense",${c}$${EV_FIRST}:${c})`;
+    const ops = [
+      { op: 'addSheet', name: tab },
+      { op: 'set', range: A1(tab, 1, 1), values: [['Event: ' + name]] },
+      { op: 'format', range: A1(tab, 1, 1), bold: true, fontSize: 14 },
+      { op: 'set', range: A1(tab, 2, 1), values: [['Net (revenue − expenses)']] },
+      { op: 'set', range: A1(tab, 2, 5, 2, 7), values: [[net('E'), net('F'), '=F2-E2']] },
+      { op: 'format', range: A1(tab, 2, 5, 2, 7), numberFormat: '#,##0.00', bold: true },
+      { op: 'set', range: A1(tab, 3, 1), values: [['BUDGET (EGP)']] },
+      { op: 'set', range: A1(tab, 3, 9), values: [['EVENT CASH FLOW']] },
+      { op: 'format', range: A1(tab, 3, 1, 3, 9), bold: true },
+      { op: 'set', range: A1(tab, 4, 1, 4, 7), values: [['Type', 'Item', 'Units', 'Amount per unit (EGP)', 'Budgeted (EGP)', 'Actual (EGP)', 'Difference']] },
+      { op: 'set', range: A1(tab, 4, 9, 4, 15), values: [['Date', 'Type', 'Item', 'Currency', 'Amount', 'EGP equivalent', 'Description']] },
+      { op: 'format', range: A1(tab, 4, 1, 4, 7), bold: true, background: '#e8f1fd' },
+      { op: 'format', range: A1(tab, 4, 9, 4, 15), bold: true, background: '#e8f1fd' },
+      { op: 'format', range: A1(tab, EV_FIRST, 3, 1000, 3), numberFormat: '#,##0.##' },
+      { op: 'format', range: A1(tab, EV_FIRST, 4, 1000, 7), numberFormat: '#,##0.00' },
+      { op: 'format', range: A1(tab, EV_FIRST, 13, 1000, 14), numberFormat: '#,##0.00' },
+      { op: 'set', range: A1(tab, EV_FIRST, 1, EV_FIRST + sorted.length - 1, 7), values: sorted.map((l, i) => budgetRow(l, EV_FIRST + i)) },
+      { op: 'freeze', sheet: tab, rows: 4 },
+      { op: 'colWidth', sheet: tab, col: 2, px: 180 }, { op: 'colWidth', sheet: tab, col: 11, px: 180 }, { op: 'colWidth', sheet: tab, col: 15, px: 240 },
+    ];
+    await write(ops);
+    return { name };
+  },
+
+  async addEventLine(d) {
+    await refreshMeta();
+    const ev = await loadEvent_(d.name);
+    const all = checkLines(ev.lines.map(l => ({ type: l.type, item: l.item, units: l.units, amount: l.amount })).concat([{ type: d.type, item: d.item, units: d.units, amount: d.amount }]));
+    const l = all[all.length - 1], tab = EVENT_PREFIX + d.name;
+    await write([{ op: 'putNextRow', sheet: tab, from: EV_FIRST, to: sheetInfo(tab).maxRows, scanFrom: 1, scanTo: 2, col: 1, values: budgetRow(l, '{r}') }]);
+    return {};
+  },
+
+  async addEventEntry(d) {
+    await refreshMeta();
+    const ev = await loadEvent_(d.name);
+    const line = ev.lines.find(l => l.type === d.type && l.item === d.item);
+    if (!line) throw new Error('Choose a budget line');
+    const amount = num(d.amount);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date || '')) throw new Error('Choose a date');
+    if (!(amount > 0)) throw new Error('Amount must be more than 0');
+    if (!['EGP', 'USD', 'EUR'].includes(d.currency)) throw new Error('Choose a currency');
+    let rate = 1;
+    if (d.currency !== 'EGP') { // exchange rate is only READ from that month's rates in [MAIN] Cashflow
+      const b = await blockFor(d.date);
+      const row = d.currency === 'USD' ? b.usdRow : b.eurRow;
+      rate = row ? num((await read(A1(MAIN, row, 13)))[0][0][0]) : 0;
+      if (!rate) throw new Error('No exchange rate for ' + d.currency + ' in the sheet');
+    }
+    const tab = EVENT_PREFIX + d.name;
+    const [r] = await write([{ op: 'putNextRow', sheet: tab, from: EV_FIRST, to: sheetInfo(tab).maxRows, scanFrom: FLOW_COL, scanTo: FLOW_COL + 6, col: FLOW_COL,
+      values: [{ d: d.date }, d.type, line.item, d.currency, amount, amount * rate, String(d.description || '').trim()] }]);
+    return { row: r.row };
+  },
+};
+
+// Month sections of [MAIN] Cashflow: each starts with a date in column L, then "USD$ rate =" / "Euro rate =" rows.
+async function blockFor(dateStr) {
+  const info = sheetInfo(MAIN);
+  const [vals] = await read(A1(MAIN, 1, 12, info.rows, 13));
+  const starts = [];
+  vals.forEach((r, i) => { if (isDate(r[0])) starts.push({ row: i + 1, month: Number(r[0].d.slice(5, 7)) - 1 }); });
+  const month = Number(dateStr.slice(5, 7)) - 1;
+  const i = starts.findIndex(s => s.month === month);
+  if (i < 0) throw new Error('No month section in ' + MAIN + ' for ' + new Date(dateStr + 'T00:00:00').toLocaleString('en-US', { month: 'long' }));
+  const b = starts[i];
+  let usdRow = 0, eurRow = 0;
+  for (let r = b.row; r < b.row + 8 && r <= vals.length; r++) {
+    const label = String(vals[r - 1][0]).toLowerCase();
+    if (label.includes('usd') && label.includes('rate')) usdRow = r;
+    if (label.includes('euro') && label.includes('rate')) eurRow = r;
+  }
+  const first = (eurRow || b.row + 4) + 1;
+  const end = Math.min(i + 1 < starts.length ? starts[i + 1].row - 1 : first + 145, info.maxRows - 1);
+  return { first, end, usdRow, eurRow };
+}
+
+function checkLines(lines) {
+  const seen = {};
+  return lines.map(l => {
+    const item = String(l.item || '').trim();
+    if (!item) throw new Error('Every line needs a name');
+    if (l.type !== 'Revenue' && l.type !== 'Expense') throw new Error('Bad line type');
+    const key = l.type + '|' + item.toLowerCase();
+    if (seen[key]) throw new Error('"' + item + '" is listed twice');
+    seen[key] = 1;
+    const units = l.units === '' || l.units == null ? 1 : num(l.units), amount = num(l.amount);
+    if (!(units > 0)) throw new Error('Units for "' + item + '" must be more than 0');
+    if (amount < 0) throw new Error('Amount for "' + item + '" cannot be negative');
+    return { type: l.type, item, units, amount };
+  });
+}
+
+// One budget row A..G. `r` is the row number, or "{r}" when the connector picks the row.
+function budgetRow(l, r) {
+  return [l.type, l.item, l.units, l.amount, `=C${r}*D${r}`,
+    `=SUMIFS($N$${EV_FIRST}:$N,$J$${EV_FIRST}:$J,A${r},$K$${EV_FIRST}:$K,B${r})`, `=F${r}-E${r}`];
+}
+
+async function loadEvent_(name) {
+  const tab = EVENT_PREFIX + name, info = sheetInfo(tab);
+  if (!info) throw new Error('Event not found: ' + name);
+  const last = Math.max(info.rows, EV_FIRST);
+  let [head, rows] = await read(A1(tab, 4, 3), A1(tab, EV_FIRST, 1, last, 15));
+  if (String(head[0][0]).startsWith('Expected')) { await upgradeEvent(tab, rows, last); [rows] = await read(A1(tab, EV_FIRST, 1, last + 0, 15)); }
+  const entries = rows.filter(r => filled(r[FLOW_COL + 1])).map(r => {
+    const f = r.slice(FLOW_COL - 1);
+    return { date: ymd(f[0]), type: f[1], item: f[2], currency: f[3], amount: num(f[4]), egp: num(f[5]), description: String(f[6]) };
+  });
+  const lines = rows.filter(r => filled(r[1])).map(r => {
+    const units = num(r[2]), amount = num(r[3]);
+    const actual = entries.filter(e => e.type === r[0] && e.item === r[1]).reduce((s, e) => s + e.egp, 0);
+    return { type: r[0], item: r[1], units, amount, budgeted: units * amount, actual };
+  });
+  return { name, lines, entries: entries.reverse() };
+}
+
+// Event tabs made before "units × amount": add Units + Amount columns (old amount = 1 unit × amount).
+async function upgradeEvent(tab, oldRows, last) {
+  const ops = [{ op: 'insertColumns', sheet: tab, before: 3, count: 2 }];
+  oldRows.forEach((r, i) => {
+    if (!filled(r[1])) return;
+    const row = EV_FIRST + i;
+    ops.push({ op: 'set', range: A1(tab, row, 3, row, 5), values: [[1, num(r[2]), `=C${row}*D${row}`]] });
+  });
+  ops.push({ op: 'set', range: A1(tab, 4, 3, 4, 7), values: [['Units', 'Amount per unit (EGP)', 'Budgeted (EGP)', 'Actual (EGP)', 'Difference']] },
+    { op: 'format', range: A1(tab, 4, 3, 4, 7), bold: true, background: '#e8f1fd' },
+    { op: 'clear', range: A1(tab, 2, 3, 2, 4) },
+    { op: 'format', range: A1(tab, EV_FIRST, 3, Math.max(last, EV_FIRST), 3), numberFormat: '#,##0.##' });
+  await write(ops);
 }
 
 // ===================================================================== helpers
@@ -739,57 +972,64 @@ $('logoutBtn').addEventListener('click', async () => {
   toast('You are logged out');
 });
 
-// ===================================================================== demo data (in memory only)
-const demo = (() => {
-  const income = ['MC | Entity Affiliation Fee Revenue: Fixed Payment', 'MC | EwA Revenues: Entity EwA Initiatives Partner Fee',
-    'MC | Project Mgt Revenue: Conference and Meetings (National+Local) Participant Fee', 'MC | Project Mgt Revenue: Conference and Meetings (National+Local) Partner Fee', 'MC | Miscellaneous Revenue'];
-  const expense = ['MC | Overhead Costs: (Office)', 'MC | Overhead Costs: (HR)', 'MC | Project Mgt Costs: Conference and Meetings (National+Local)',
-    'MC | Project Mgt Costs: Partnership Logistics', 'MC | Miscellaneous Costs'];
-  const rates = { EGP: 1, USD: 49.5, EUR: 57.2 };
-  const opening = { EGP: 39787, USD: 91751, EUR: 54360 };
-  const main = [
-    { date: '2026-11-01', type: 'Expense', currency: 'EGP', amount: 42000, description: 'Office rent', category: expense[0] },
-    { date: '2026-11-02', type: 'Revenue', currency: 'EGP', amount: 50000, description: 'MUST cash added to reserve', category: income[0] },
-  ];
-  const events = {};
-  return { income, expense, rates, opening, main, events };
+// ===================================================================== demo: a fake copy of the finance sheet, in memory only
+const demoBook = (() => {
+  const book = {};
+  const sheet = (name, maxRows = 1000) => (book[name] = { cells: {}, maxRows });
+  const set = (s, r, c, v) => { book[s].cells[r + ',' + c] = v; };
+  // [MAIN] Cashflow: one section per month, Aug → Jul, like the real sheet
+  sheet(MAIN, 2072);
+  const months = ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04', '2027-05', '2027-06', '2027-07'];
+  months.forEach((m, i) => {
+    const h = 3 + i * 150;
+    set(MAIN, h, 12, { d: m + '-01' }); set(MAIN, h + 3, 12, 'USD$ rate ='); set(MAIN, h + 3, 13, 49.5); set(MAIN, h + 4, 12, 'Euro rate ='); set(MAIN, h + 4, 13, 57.2);
+    for (let r = h + 5; r < h + 150; r++) { set(MAIN, r, 1, 39787); set(MAIN, r, 2, 91751); set(MAIN, r, 3, 54360); }
+  });
+  const nov = 3 + 3 * 150 + 5;
+  set(MAIN, nov, 4, { d: '2026-11-01' }); set(MAIN, nov, 5, 42000); set(MAIN, nov, 12, 'Office rent'); set(MAIN, nov, 15, 'MC | Overhead Costs: (Office)');
+  set(MAIN, nov + 1, 4, { d: '2026-11-02' }); set(MAIN, nov + 1, 9, 50000); set(MAIN, nov + 1, 12, 'MUST cash added to reserve'); set(MAIN, nov + 1, 14, 'MC | Entity Affiliation Fee Revenue: Fixed Payment');
+  // Income statement categories (C = code, D = name)
+  sheet(IS, 120);
+  [['5110-EA-RV-MC', 'MC | EwA Revenues: Entity EwA Initiatives Partner Fee'], ['5301-MG-RV-MC', 'MC | Project Mgt Revenue: Conference and Meetings (National+Local) Participant Fee'],
+   ['5407-IN-RV-MC', 'MC | Entity Affiliation Fee Revenue: Fixed Payment'], ['5501-NE-RV-MC', 'MC | Miscellaneous Revenue'],
+   ['5901-MG-CO-MC', 'MC | Project Mgt Costs: Conference and Meetings (National+Local)'], ['6101-OH-CO-MC', 'MC | Overhead Costs: (Office)'],
+   ['6102-OH-CO-MC', 'MC | Overhead Costs: (HR)'], ['6402-NE-CO-MC', 'MC | Miscellaneous Costs']].forEach(([c, n], i) => { set(IS, 8 + i, 3, c); set(IS, 8 + i, 4, n); });
+  return book;
 })();
 
-async function demoApi(action, d) {
-  await new Promise(r => setTimeout(r, 120));
-  const D = demo;
-  const addMain = x => {
-    if (!(x.amount > 0)) throw new Error('Amount must be more than 0');
-    D.main.push(Object.assign({}, x)); return D.main.length + 285;
-  };
+function demoParse(a1) {
+  const m = /^'((?:[^']|'')+)'!([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(a1);
+  if (!m) throw new Error('Bad range ' + a1);
+  const n = s => [...s].reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
+  const sheet = m[1].replace(/''/g, "'");
+  if (!demoBook[sheet]) throw new Error('Tab not found');
+  return { sheet, r1: +m[3], c1: n(m[2]), r2: +(m[5] || m[3]), c2: n(m[4] || m[2]) };
+}
+function demoLast(s) { let r = 0, c = 0; Object.keys(demoBook[s].cells).forEach(k => { if (filled(demoBook[s].cells[k])) { const [a, b] = k.split(',').map(Number); r = Math.max(r, a); c = Math.max(c, b); } }); return { r, c }; }
+function demoGet(s, r, c) { const v = demoBook[s].cells[r + ',' + c]; return v === undefined ? '' : v; }
+
+async function demoRpc(action, d) {
+  await new Promise(r => setTimeout(r, 60));
   if (action === 'login') { if (d.password !== 'demo1234') throw new Error('Wrong username or password'); return { token: 'demo', user: d.username }; }
-  if (action === 'init') return { incomeCategories: D.income, expenseCategories: D.expense, today: today(), user: store.get('fin_user') };
-  if (action === 'cashflow') {
-    const m = d.month || today().slice(0, 7);
-    const bal = Object.assign({}, D.opening);
-    D.main.filter(x => x.date.slice(0, 7) <= m).forEach(x => bal[x.currency] += (x.type === 'Revenue' ? 1 : -1) * x.amount);
-    return { month: m, balance: bal, lines: D.main.filter(x => x.date.slice(0, 7) === m).slice().reverse() };
-  }
-  if (action === 'addCashflow') return { row: addMain(d) };
-  if (action === 'listEvents') return Object.values(D.events).map(ev => {
-    const n = f => ev.lines.reduce((s, l) => s + (l.type === 'Revenue' ? 1 : -1) * l[f], 0);
-    return { name: ev.name, budgetedNet: n('budgeted'), actualNet: n('actual') };
+  if (action === 'meta') return { user: store.get('fin_user') || 'Demo', version: 2, today: today(),
+    sheets: Object.keys(demoBook).map(name => { const l = demoLast(name); return { name, rows: l.r, cols: l.c, maxRows: demoBook[name].maxRows }; }) };
+  if (action === 'read') return d.ranges.map(a1 => { const p = demoParse(a1), out = [];
+    for (let r = p.r1; r <= p.r2; r++) { const row = []; for (let c = p.c1; c <= p.c2; c++) row.push(demoGet(p.sheet, r, c)); out.push(row); } return out; });
+  if (action === 'write') return d.ops.map(o => {
+    const fill = (s, r, c, vals) => vals.forEach((v, j) => { demoBook[s].cells[r + ',' + (c + j)] = typeof v === 'string' ? v.replace(/\{r\}/g, r) : v; });
+    if (o.op === 'set') { const p = demoParse(o.range); o.values.forEach((row, i) => fill(p.sheet, p.r1 + i, p.c1, row)); return {}; }
+    if (o.op === 'putNextRow') {
+      let last = o.from - 1;
+      for (let r = o.from; r <= o.to; r++) for (let c = o.scanFrom; c <= o.scanTo; c++) if (filled(demoGet(o.sheet, r, c))) last = r;
+      if (last + 1 > o.to) throw new Error('No free row left');
+      fill(o.sheet, last + 1, o.col, o.values); return { row: last + 1 };
+    }
+    if (o.op === 'clear') { const p = demoParse(o.range); for (let r = p.r1; r <= p.r2; r++) for (let c = p.c1; c <= p.c2; c++) delete demoBook[p.sheet].cells[r + ',' + c]; return {}; }
+    if (o.op === 'addSheet') { if (demoBook[o.name]) throw new Error('A tab with this name already exists'); demoBook[o.name] = { cells: {}, maxRows: 1000 }; return {}; }
+    if (o.op === 'insertColumns') { const s = demoBook[o.sheet], nc = {};
+      Object.entries(s.cells).forEach(([k, v]) => { const [r, c] = k.split(',').map(Number); nc[r + ',' + (c >= o.before ? c + o.count : c)] = v; }); s.cells = nc; return {}; }
+    return {}; // format, freeze, colWidth: nothing to do in the demo
   });
-  if (action === 'createEvent') {
-    if (D.events[d.name]) throw new Error('An event with this name already exists');
-    D.events[d.name] = { name: d.name, lines: d.lines.map(l => Object.assign({ actual: 0 }, l, { budgeted: budgeted(l) })), entries: [] };
-    return { name: d.name };
-  }
-  if (action === 'getEvent') { const ev = D.events[d.name]; if (!ev) throw new Error('Event not found'); return JSON.parse(JSON.stringify(ev)); }
-  if (action === 'addEventLine') { D.events[d.name].lines.push({ type: d.type, item: d.item, units: d.units, amount: d.amount, budgeted: budgeted(d), actual: 0 }); return {}; }
-  if (action === 'addEventEntry') {
-    const ev = D.events[d.name], line = ev.lines.find(l => l.type === d.type && l.item === d.item);
-    if (!(d.amount > 0)) throw new Error('Amount must be more than 0');
-    const egp = d.amount * D.rates[d.currency];
-    line.actual += egp;
-    ev.entries.unshift({ date: d.date, type: d.type, item: d.item, currency: d.currency, amount: d.amount, egp, description: d.description });
-    return {};
-  }
   throw new Error('Unknown action');
 }
 
