@@ -133,6 +133,9 @@
   .login > p.muted { text-align: center; margin: 0 0 10px; }
   .login-mark { width: 64px; height: 64px; margin: 0 auto 6px; border: 1.5px solid var(--line); border-radius: 50%; display: grid; place-items: center; font-size: 28px; text-shadow: 0 0 14px var(--red-glow); }
   .login-error { border: 1px solid var(--ink); background: rgba(255,0,0,.12); border-radius: 10px; padding: 9px 12px; margin: 14px 0 0; font-size: 13px; }
+  /* Keep browser-autofilled boxes black with red text */
+  input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--ink); -webkit-box-shadow: 0 0 0 1000px #000 inset; caret-color: var(--ink); transition: background-color 9999s; }
   .pw { position: relative; }
   .pw input { padding-right: 44px; }
   .pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; cursor: pointer; font-size: 16px; padding: 4px 8px; filter: grayscale(1) brightness(1.6); }
@@ -666,17 +669,27 @@ $('lgEye').addEventListener('click', () => {
   $('lgEye').title = p.type === 'password' ? 'Show password' : 'Hide password';
 });
 
+function lgFail(msg) { $('lgError').textContent = msg; $('lgError').classList.remove('hidden'); }
+
 $('loginForm').addEventListener('submit', e => {
   e.preventDefault();
   busy($('loginBtn'), async () => {
     $('lgError').classList.add('hidden');
+    // Browsers that saved the old "URL + API key" form fill the link into Username. Move it where it belongs.
+    if (/^https:\/\/script\.google\.com\//.test($('lgUser').value.trim())) {
+      const link = $('lgUser').value.trim();
+      if (!serverUrl()) { $('lgServer').value = link; $('lgServerWrap').classList.remove('hidden'); }
+      $('lgUser').value = ''; $('lgPass').value = '';
+      $('lgUser').focus();
+      return lgFail('Your browser filled in the old server link and key. ' + (serverUrl() ? '' : 'The link is now in “Server link”. ') + 'Please type your username and password.');
+    }
     const username = $('lgUser').value.trim(), password = $('lgPass').value;
     if (!$('lgServerWrap').classList.contains('hidden')) {
       const url = $('lgServer').value.trim();
-      if (!url.startsWith('https://script.google.com/')) throw new Error('The server link should start with https://script.google.com/');
+      if (!url.startsWith('https://script.google.com/')) return lgFail('The server link should start with https://script.google.com/');
       store.set('fin_url', url);
     }
-    if (!username || !password) throw new Error('Write your username and password');
+    if (!username || !password) return lgFail('Write your username and password');
     try {
       const r = await api('login', { username, password });
       store.set('fin_token', r.token); store.set('fin_user', r.user);
