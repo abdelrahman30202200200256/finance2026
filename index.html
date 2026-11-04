@@ -85,8 +85,18 @@
   .steps div { flex: 1; min-width: 110px; padding: 8px 10px; border-radius: 8px; background: #eef1f6; color: var(--muted); font-size: 12px; font-weight: 600; }
   .steps div.on { background: var(--blue); color: #fff; }
   .steps div.done { background: #cfe3ff; color: var(--blue-dark); }
-  .line-row { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; margin-bottom: 8px; align-items: center; }
-  @media (max-width: 640px) { .line-row { grid-template-columns: 1fr auto; } .line-row select { grid-column: 1 / -1; grid-row: 2; } }
+  .line-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px; align-items: center; max-width: 520px; }
+
+  /* Type-to-filter menus */
+  .combo { position: relative; }
+  .combo input { padding-right: 30px; }
+  .combo::after { content: "▾"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; font-size: 12px; }
+  .combo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(16,24,40,.12); max-height: 260px; overflow-y: auto; z-index: 20; }
+  .combo-list div { padding: 8px 10px; cursor: pointer; font-size: 13px; }
+  .combo-list div.hl { background: #e8f1fd; }
+  .combo-list div.on { font-weight: 600; color: var(--blue); }
+  .combo-list .empty { color: var(--muted); cursor: default; }
   .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px 8px; }
   .x:hover { color: var(--bad); }
   .wiz-nav { display: flex; justify-content: space-between; margin-top: 18px; gap: 10px; }
@@ -215,7 +225,7 @@
           <label>Amount</label><input type="number" id="evAmount" min="0" step="0.01" placeholder="0.00">
           <label>Description (optional)</label><input id="evDesc" placeholder="e.g. deposit for the venue">
           <button class="btn full" id="evSave">Submit</button>
-          <p class="muted small">Saved in the event tab and in [MAIN] Cashflow at the same time.</p>
+          <p class="muted small">Saved only in this event's own cash flow (its tab in the sheet). The main cash flow is not changed.</p>
         </div>
         <div class="card">
           <button class="btn link" id="evLineToggle">+ Add a new budget line</button>
@@ -223,7 +233,6 @@
             <label>Type</label>
             <div class="seg type" id="elType"><button data-v="Revenue" class="on">Revenue</button><button data-v="Expense">Expense</button></div>
             <label>Name</label><input id="elItem" placeholder="e.g. Sponsorship">
-            <label>GFB category</label><select id="elGfb"></select>
             <label>Expected amount (EGP)</label><input type="number" id="elExpected" min="0" step="0.01">
             <button class="btn full" id="elSave">Add line</button>
           </div>
@@ -300,6 +309,62 @@ function catOptions(list, placeholder) {
   return `<option value="">${esc(placeholder || 'Choose category')}</option>` + list.map(c => `<option value="${esc(c)}">${esc(short(c))}</option>`).join('');
 }
 
+// ===================================================================== type-to-filter menus
+// Turns a <select> into a box you can type in: typing "a" shows only options starting with "a".
+// The original <select> stays (hidden) and keeps the chosen value, so the rest of the code is unchanged.
+function makeCombo(sel) {
+  const wrap = document.createElement('div'); wrap.className = 'combo';
+  const input = document.createElement('input'); input.autocomplete = 'off'; input.spellcheck = false;
+  const list = document.createElement('div'); list.className = 'combo-list hidden';
+  sel.parentNode.insertBefore(wrap, sel); wrap.append(input, list, sel); sel.classList.add('hidden');
+  let hl = 0, items = [];
+  const opts = () => [...sel.options].filter(o => o.value !== '');
+  const sync = () => {
+    const o = sel.selectedOptions[0];
+    input.value = o && o.value !== '' ? o.text : '';
+    const ph = [...sel.options].find(x => x.value === '');
+    input.placeholder = ph ? ph.text + ' (type to search)' : 'Type to search';
+  };
+  const close = () => list.classList.add('hidden');
+  const render = () => {
+    const q = input.value.trim().toLowerCase();
+    const cur = sel.selectedOptions[0];
+    const all = opts();
+    if (!q || (cur && cur.value !== '' && input.value === cur.text)) items = all;
+    else {
+      items = all.filter(o => o.text.toLowerCase().startsWith(q));
+      if (!items.length) items = all.filter(o => o.text.toLowerCase().includes(q)); // nothing starts with it → show anything that contains it
+    }
+    hl = Math.max(0, Math.min(hl, items.length - 1));
+    list.innerHTML = items.length
+      ? items.map((o, i) => `<div data-i="${i}" class="${i === hl ? 'hl' : ''} ${o.selected && o.value !== '' ? 'on' : ''}">${esc(o.text)}</div>`).join('')
+      : '<div class="empty">No match</div>';
+    list.classList.remove('hidden');
+    const h = list.querySelector('.hl'); if (h) list.scrollTop = Math.max(0, h.offsetTop - list.clientHeight + h.offsetHeight);
+  };
+  const pick = o => { sel.value = o.value; sync(); close(); sel.dispatchEvent(new Event('change', { bubbles: true })); };
+  input.addEventListener('focus', () => { hl = 0; input.select(); render(); });
+  input.addEventListener('click', () => { if (list.classList.contains('hidden')) render(); });
+  input.addEventListener('input', () => { hl = 0; render(); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { hl = Math.min(hl + 1, items.length - 1); render(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { hl = Math.max(hl - 1, 0); render(); e.preventDefault(); }
+    else if (e.key === 'Enter') { if (items[hl]) pick(items[hl]); e.preventDefault(); }
+    else if (e.key === 'Escape') { sync(); close(); input.blur(); }
+  });
+  list.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); e.preventDefault(); if (d) pick(items[+d.dataset.i]); });
+  input.addEventListener('blur', () => {
+    const cur = sel.selectedOptions[0];
+    if (input.value.trim() && items.length === 1 && (!cur || items[0] !== cur)) pick(items[0]); // only one match → choose it
+    else { sync(); close(); }
+  });
+  new MutationObserver(sync).observe(sel, { childList: true, subtree: true });
+  sel._sync = sync;
+  sync();
+}
+function setSelect(sel, v) { sel.value = v; if (sel._sync) sel._sync(); }
+['cfCategory', 'cfMonth', 'evItem'].forEach(id => makeCombo($(id)));
+
 // ===================================================================== routing
 let INIT = null;
 const PAGES = ['connect', 'home', 'cashflow', 'events', 'new-event', 'event', 'reserve'];
@@ -336,7 +401,7 @@ function fillCfCategory() {
   $('cfCategory').innerHTML = catOptions(rev ? INIT.incomeCategories : INIT.expenseCategories, rev ? 'Choose revenue category' : 'Choose expense category');
 }
 $('cfType').addEventListener('change', fillCfCategory);
-$('cfDate').addEventListener('change', () => { const m = $('cfDate').value.slice(0, 7); if ([...$('cfMonth').options].some(o => o.value === m)) $('cfMonth').value = m; });
+$('cfDate').addEventListener('change', () => { const m = $('cfDate').value.slice(0, 7); if ([...$('cfMonth').options].some(o => o.value === m) && $('cfMonth').value !== m) { setSelect($('cfMonth'), m); loadCashflow(); } });
 $('cfMonth').addEventListener('change', loadCashflow);
 
 async function loadCashflow() {
@@ -364,7 +429,7 @@ $('cfSave').addEventListener('click', e => busy(e.target, async () => {
   const r = await api('addCashflow', data);
   toast(`Saved in [MAIN] Cashflow (row ${r.row})`);
   $('cfAmount').value = ''; $('cfDesc').value = '';
-  $('cfMonth').value = data.date.slice(0, 7);
+  setSelect($('cfMonth'), data.date.slice(0, 7));
   loadCashflow();
 }));
 
@@ -384,15 +449,13 @@ $('eventList').addEventListener('click', e => { const it = e.target.closest('.it
 // ===================================================================== new event wizard
 const WZ_STEPS = ['1. Event name', '2. Revenue lines', '3. Expense lines', '4. Expected amounts', '5. Review'];
 let wz = null;
-function wzStart() { wz = { step: 0, name: '', revenue: [{ item: '', gfb: '' }], expense: [{ item: '', gfb: '' }] }; wzRender(); }
+function wzStart() { wz = { step: 0, name: '', revenue: [{ item: '' }], expense: [{ item: '' }] }; wzRender(); }
 
 function wzLinesHtml(kind) {
-  const list = wz[kind], cats = kind === 'revenue' ? INIT.incomeCategories : INIT.expenseCategories;
-  return `<p class="muted">Write each ${kind} item in simple words, and pick the official GFB category it belongs to (this keeps the Income Statement correct).${kind === 'revenue' ? ' Leave empty if the event has no revenue.' : ''}</p>
-    <div class="line-row muted small"><div>Item name</div><div>GFB category</div><div></div></div>` +
+  const list = wz[kind];
+  return `<p class="muted">Write each ${kind} item of the event, one per line.${kind === 'revenue' ? ' Leave empty if the event has no revenue.' : ''}</p>` +
     list.map((l, i) => `<div class="line-row" data-i="${i}">
       <input data-f="item" value="${esc(l.item)}" placeholder="${kind === 'revenue' ? 'e.g. Tickets, Sponsorship' : 'e.g. Venue, Food, Transport'}">
-      <select data-f="gfb">${catOptions(cats, 'Choose GFB category').replace(`value="${esc(l.gfb)}"`, `value="${esc(l.gfb)}" selected`)}</select>
       <button class="x" data-del="${i}" title="Remove">×</button></div>`).join('') +
     `<button class="btn link" id="wzAdd">+ Add ${kind} line</button>`;
 }
@@ -404,20 +467,20 @@ function wzRender() {
   if (wz.step === 1) b.innerHTML = wzLinesHtml('revenue');
   if (wz.step === 2) b.innerHTML = wzLinesHtml('expense');
   if (wz.step === 3) {
-    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="3">${title}</td></tr>` + wz[kind].map((l, i) =>
-      `<tr><td>${esc(l.item)}</td><td class="small muted">${esc(short(l.gfb))}</td><td style="width:180px"><input type="number" min="0" step="0.01" data-kind="${kind}" data-i="${i}" value="${l.expected ?? ''}" placeholder="0"></td></tr>`).join('') : '';
-    b.innerHTML = `<p class="muted">Fill the expected amount for each line, in EGP.</p><div class="table-wrap"><table>
-      <tr><th>Item</th><th>GFB category</th><th>Expected (EGP)</th></tr>${rows('revenue', 'Revenue')}${rows('expense', 'Expenses')}</table></div>`;
+    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="2">${title}</td></tr>` + wz[kind].map((l, i) =>
+      `<tr><td>${esc(l.item)}</td><td style="width:200px"><input type="number" min="0" step="0.01" data-kind="${kind}" data-i="${i}" value="${l.expected ?? ''}" placeholder="0"></td></tr>`).join('') : '';
+    b.innerHTML = `<p class="muted">Fill the expected amount for each line, in EGP.</p><div class="table-wrap"><table style="max-width:560px">
+      <tr><th>Item</th><th>Expected (EGP)</th></tr>${rows('revenue', 'Revenue')}${rows('expense', 'Expenses')}</table></div>`;
   }
   if (wz.step === 4) {
     const sum = k => wz[k].reduce((s, l) => s + (Number(l.expected) || 0), 0);
-    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="3">${title}</td></tr>` + wz[kind].map(l =>
-      `<tr><td>${esc(l.item)}</td><td class="small muted">${esc(short(l.gfb))}</td><td class="num">${fmt(l.expected || 0, 2)}</td></tr>`).join('') +
-      `<tr class="total"><td colspan="2">Total ${title.toLowerCase()}</td><td class="num">${fmt(sum(kind), 2)}</td></tr>` : '';
-    b.innerHTML = `<h3>${esc(wz.name)}</h3><div class="table-wrap"><table><tr><th>Item</th><th>GFB category</th><th class="num">Expected (EGP)</th></tr>
+    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="2">${title}</td></tr>` + wz[kind].map(l =>
+      `<tr><td>${esc(l.item)}</td><td class="num">${fmt(l.expected || 0, 2)}</td></tr>`).join('') +
+      `<tr class="total"><td>Total ${title.toLowerCase()}</td><td class="num">${fmt(sum(kind), 2)}</td></tr>` : '';
+    b.innerHTML = `<h3>${esc(wz.name)}</h3><div class="table-wrap"><table style="max-width:560px"><tr><th>Item</th><th class="num">Expected (EGP)</th></tr>
       ${rows('revenue', 'Revenue')}${rows('expense', 'Expenses')}
-      <tr class="total"><td colspan="2">Expected net (revenue − expenses)</td><td class="num">${money(sum('revenue') - sum('expense'), 2)}</td></tr></table></div>
-      <p class="muted small">Clicking “Create event” adds a new tab “[EVENT] ${esc(wz.name)}” to the finance sheet.</p>`;
+      <tr class="total"><td>Expected net (revenue − expenses)</td><td class="num">${money(sum('revenue') - sum('expense'), 2)}</td></tr></table></div>
+      <p class="muted small">Clicking “Create event” adds a new tab “[EVENT] ${esc(wz.name)}” to the finance sheet, with the event's own cash flow.</p>`;
   }
   $('wzBack').style.visibility = wz.step === 0 ? 'hidden' : 'visible';
   $('wzNext').textContent = wz.step === 4 ? 'Create event' : 'Next';
@@ -429,7 +492,7 @@ function wzCollect() {
     const kind = wz.step === 1 ? 'revenue' : 'expense';
     wz[kind] = [...$('wzBody').querySelectorAll('.line-row[data-i]')].map(r => {
       const old = wz[kind][r.dataset.i] || {};
-      return { item: r.querySelector('[data-f=item]').value.trim(), gfb: r.querySelector('[data-f=gfb]').value, expected: old.expected };
+      return { item: r.querySelector('[data-f=item]').value.trim(), expected: old.expected };
     });
   }
   if (wz.step === 3) $('wzBody').querySelectorAll('input[data-kind]').forEach(i => { wz[i.dataset.kind][i.dataset.i].expected = i.value === '' ? '' : Number(i.value); });
@@ -439,11 +502,9 @@ function wzValidate() {
   if (wz.step === 0 && !wz.name) throw new Error('Write the event name');
   if (wz.step === 1 || wz.step === 2) {
     const kind = wz.step === 1 ? 'revenue' : 'expense';
-    wz[kind] = wz[kind].filter(l => l.item || l.gfb);
+    wz[kind] = wz[kind].filter(l => l.item);
     const seen = {};
     wz[kind].forEach(l => {
-      if (!l.item) throw new Error('Write a name for every line');
-      if (!l.gfb) throw new Error(`Choose a GFB category for "${l.item}"`);
       if (seen[l.item.toLowerCase()]) throw new Error(`"${l.item}" is listed twice`);
       seen[l.item.toLowerCase()] = 1;
     });
@@ -456,15 +517,15 @@ function wzValidate() {
 }
 
 $('wzBody').addEventListener('click', e => {
-  if (e.target.id === 'wzAdd') { wzCollect(); wz[wz.step === 1 ? 'revenue' : 'expense'].push({ item: '', gfb: '' }); wzRender(); }
+  if (e.target.id === 'wzAdd') { wzCollect(); wz[wz.step === 1 ? 'revenue' : 'expense'].push({ item: '' }); wzRender(); $('wzBody').querySelector('.line-row:last-of-type input')?.focus(); }
   if (e.target.dataset.del != null) { wzCollect(); wz[wz.step === 1 ? 'revenue' : 'expense'].splice(+e.target.dataset.del, 1); wzRender(); }
 });
 $('wzBack').addEventListener('click', () => { wzCollect(); wz.step--; wzRender(); });
 $('wzNext').addEventListener('click', e => busy(e.target, async () => {
   wzCollect(); wzValidate();
   if (wz.step < 4) { wz.step++; wzRender(); return; }
-  const lines = wz.revenue.map(l => ({ type: 'Revenue', item: l.item, gfb: l.gfb, expected: l.expected }))
-    .concat(wz.expense.map(l => ({ type: 'Expense', item: l.item, gfb: l.gfb, expected: l.expected })));
+  const lines = wz.revenue.map(l => ({ type: 'Revenue', item: l.item, expected: l.expected }))
+    .concat(wz.expense.map(l => ({ type: 'Expense', item: l.item, expected: l.expected })));
   const r = await api('createEvent', { name: wz.name, lines });
   toast('Event created');
   location.hash = 'event/' + encodeURIComponent(r.name);
@@ -493,7 +554,7 @@ function renderEvent() {
       const p = l.expected ? Math.min(100, l.actual / l.expected * 100) : (l.actual ? 100 : 0);
       const over = type === 'Expense' && l.actual > l.expected;
       const diff = l.actual - l.expected;
-      return `<tr><td><b>${esc(l.item)}</b><div class="small muted">${esc(short(l.gfb))}</div><div class="bar"><span class="${over ? 'over' : ''}" style="width:${p}%"></span></div></td>
+      return `<tr><td><b>${esc(l.item)}</b><div class="bar"><span class="${over ? 'over' : ''}" style="width:${p}%"></span></div></td>
         <td class="num">${fmt(l.expected)}</td><td class="num">${fmt(l.actual)}</td>
         <td class="num ${(type === 'Expense' ? diff > 0 : diff < 0) ? 'neg' : diff ? 'pos' : ''}">${diff > 0 ? '+' : ''}${fmt(diff)}</td></tr>`;
     }).join('') + `<tr class="total"><td>Total</td><td class="num">${fmt(s(type, 'expected'))}</td><td class="num">${fmt(s(type, 'actual'))}</td><td class="num">${fmt(s(type, 'actual') - s(type, 'expected'))}</td></tr>`;
@@ -505,7 +566,6 @@ function renderEvent() {
       <td>${esc(x.description)}</td><td class="num">${fmt(x.amount, 2)} ${esc(x.currency)}</td><td class="num">${fmt(x.egp)}</td></tr>`).join('')
       : '<tr><td colspan="5" class="muted">Nothing added yet</td></tr>');
   fillEvItems();
-  fillElGfb();
 }
 
 function fillEvItems() {
@@ -523,21 +583,15 @@ $('evSave').addEventListener('click', e => busy(e.target, async () => {
   if (!data.item) throw new Error('Choose a budget line');
   if (!(data.amount > 0)) throw new Error('Write an amount more than 0');
   const r = await api('addEventEntry', data);
-  toast(`Saved in the event and in [MAIN] Cashflow (row ${r.mainRow})`);
+  toast('Saved in the event cash flow');
   $('evAmount').value = ''; $('evDesc').value = '';
   EV = await api('getEvent', { name: EV.name }); renderEvent();
 }));
 
-function fillElGfb() {
-  const rev = segValue('elType') === 'Revenue';
-  $('elGfb').innerHTML = catOptions(rev ? INIT.incomeCategories : INIT.expenseCategories, 'Choose GFB category');
-}
-$('elType').addEventListener('change', fillElGfb);
 $('evLineToggle').addEventListener('click', () => $('evLineForm').classList.toggle('hidden'));
 $('elSave').addEventListener('click', e => busy(e.target, async () => {
-  const data = { name: EV.name, type: segValue('elType'), item: $('elItem').value.trim(), gfb: $('elGfb').value, expected: Number($('elExpected').value) || 0 };
+  const data = { name: EV.name, type: segValue('elType'), item: $('elItem').value.trim(), expected: Number($('elExpected').value) || 0 };
   if (!data.item) throw new Error('Write a name');
-  if (!data.gfb) throw new Error('Choose a GFB category');
   await api('addEventLine', data);
   toast('Budget line added');
   $('elItem').value = ''; $('elExpected').value = ''; $('evLineForm').classList.add('hidden');
@@ -596,14 +650,14 @@ async function demoApi(action, d) {
     return { name: d.name };
   }
   if (action === 'getEvent') { const ev = D.events[d.name]; if (!ev) throw new Error('Event not found'); return JSON.parse(JSON.stringify(ev)); }
-  if (action === 'addEventLine') { D.events[d.name].lines.push({ type: d.type, item: d.item, gfb: d.gfb, expected: d.expected, actual: 0 }); return {}; }
+  if (action === 'addEventLine') { D.events[d.name].lines.push({ type: d.type, item: d.item, expected: d.expected, actual: 0 }); return {}; }
   if (action === 'addEventEntry') {
     const ev = D.events[d.name], line = ev.lines.find(l => l.type === d.type && l.item === d.item);
-    const row = addMain({ date: d.date, type: d.type, currency: d.currency, amount: d.amount, category: line.gfb, description: `${d.name} | ${line.item}${d.description ? ' | ' + d.description : ''}` });
+    if (!(d.amount > 0)) throw new Error('Amount must be more than 0');
     const egp = d.amount * D.rates[d.currency];
     line.actual += egp;
-    ev.entries.unshift({ date: d.date, type: d.type, item: d.item, gfb: line.gfb, currency: d.currency, amount: d.amount, egp, description: d.description });
-    return { mainRow: row };
+    ev.entries.unshift({ date: d.date, type: d.type, item: d.item, currency: d.currency, amount: d.amount, egp, description: d.description });
+    return {};
   }
   throw new Error('Unknown action');
 }
