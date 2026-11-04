@@ -196,10 +196,10 @@
 </header>
 
 <!-- characters in the empty space on wide screens -->
-<div class="gutter-art" style="left:3vw;top:150px"><img class="sticker float" style="--rot:-7deg" src="assets/azooza.png" alt=""></div>
-<div class="gutter-art" style="left:4vw;bottom:60px"><img class="sticker float" style="--rot:6deg;animation-delay:-1.5s" src="assets/estakka.png" alt=""></div>
-<div class="gutter-art" style="right:3vw;top:170px"><img class="sticker float" style="--rot:7deg;animation-delay:-.7s" src="assets/sekanowa.png" alt=""></div>
-<div class="gutter-art" style="right:4vw;bottom:70px"><img class="sticker float" style="--rot:-6deg;animation-delay:-2.2s" src="assets/hoba.png" alt=""></div>
+<div class="gutter-art" style="left:3vw;top:150px"><img class="sticker float" style="--rot:-7deg" alt=""></div>
+<div class="gutter-art" style="left:4vw;bottom:60px"><img class="sticker float" style="--rot:6deg;animation-delay:-1.5s" alt=""></div>
+<div class="gutter-art" style="right:3vw;top:170px"><img class="sticker float" style="--rot:7deg;animation-delay:-.7s" alt=""></div>
+<div class="gutter-art" style="right:4vw;bottom:70px"><img class="sticker float" style="--rot:-6deg;animation-delay:-2.2s" alt=""></div>
 
 <main>
   <!-- LOGIN -->
@@ -249,11 +249,7 @@
         <span class="soon">Coming soon</span>
       </a>
     </div>
-    <div class="parade">
-      <img class="sticker float" src="assets/azooza.png" alt=""><img class="sticker float" src="assets/fakka.png" alt="">
-      <img class="sticker float" src="assets/sekanowa.png" alt=""><img class="sticker float" src="assets/estakka.png" alt="">
-      <img class="sticker float" src="assets/hoba.png" alt="">
-    </div>
+    <div class="parade" id="parade"></div>
   </section>
 
   <!-- CASH FLOW -->
@@ -658,6 +654,23 @@ async function busy(btn, fn) {
 function catOptions(list, placeholder) {
   return `<option value="">${esc(placeholder || 'Choose category')}</option>` + list.map(c => `<option value="${esc(c)}">${esc(short(c))}</option>`).join('');
 }
+
+// ===================================================================== characters
+// To add a new character: put its picture in the "assets" folder and add one line here.
+const CHARACTERS = [
+  { file: 'azooza.png', name: 'أزوزه' },
+  { file: 'fakka.png', name: 'فكه' },
+  { file: 'sekanowa.png', name: 'سيكانوا' },
+  { file: 'estakka.png', name: 'استكا' },
+  { file: 'hoba.png', name: 'هوبا' },
+];
+(function placeCharacters() {
+  // Home page row: every character
+  $('parade').innerHTML = CHARACTERS.map(c => `<img class="sticker float" src="assets/${c.file}" alt="${esc(c.name)}" title="${esc(c.name)}">`).join('');
+  // Side characters on wide screens: a different random mix each time the page opens
+  const mix = CHARACTERS.slice().sort(() => Math.random() - .5);
+  document.querySelectorAll('.gutter-art img').forEach((img, i) => { img.src = 'assets/' + mix[i % mix.length].file; });
+})();
 
 // ===================================================================== type-to-filter menus
 // Turns a <select> into a box you can type in: typing "a" shows only options starting with "a".
