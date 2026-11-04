@@ -296,15 +296,36 @@ function addCashflow_(d, user) {
 // ---------------------------------------------------------------- events
 // Each event has its OWN cash flow. Nothing is written to [MAIN] Cashflow.
 // Event tab layout:
-//   A1 title, row 2 net summary
-//   Budget (row 4 headers, rows 5+):         A Type | B Item | C Expected (EGP) | D Actual (EGP) | E Difference
-//   Event cash flow (row 4 headers, rows 5+): G Date | H Type | I Item | J Currency | K Amount | L EGP equivalent | M Description
+//   A1 title, row 2 net summary (E2 budgeted, F2 actual, G2 difference)
+//   Budget (row 4 headers, rows 5+):  A Type | B Item | C Units | D Amount per unit (EGP) | E Budgeted (=C×D) | F Actual (EGP) | G Difference
+//   Event cash flow (rows 5+):        I Date | J Type | K Item | L Currency | M Amount | N EGP equivalent | O Description
 const EV_FIRST = 5;
+const FLOW_COL = 9; // column I
 
 function eventSheet_(name) {
   const sh = ss_().getSheetByName(EVENT_PREFIX + name);
   if (!sh) throw new Error('Event not found: ' + name);
+  upgradeEvent_(sh);
   return sh;
+}
+
+/** Event tabs made before "units × amount" existed: add the Units and Amount columns (old amount = 1 unit × amount). */
+function upgradeEvent_(sh) {
+  if (String(sh.getRange('C4').getValue()).indexOf('Expected') !== 0) return;
+  sh.insertColumnsBefore(3, 2); // formulas that point to the old columns move with them
+  const last = sh.getLastRow();
+  if (last >= EV_FIRST) {
+    const vals = sh.getRange(EV_FIRST, 1, last - EV_FIRST + 1, 5).getValues();
+    vals.forEach((r, i) => {
+      if (r[1] === '') return;
+      const row = EV_FIRST + i;
+      sh.getRange(row, 3, 1, 2).setValues([[1, num_(r[4])]]);
+      sh.getRange(row, 5).setFormula(`=C${row}*D${row}`);
+    });
+  }
+  sh.getRange('C4:G4').setValues([['Units', 'Amount per unit (EGP)', 'Budgeted (EGP)', 'Actual (EGP)', 'Difference']]).setFontWeight('bold').setBackground('#e8f1fd');
+  sh.getRange('C2:D2').clearContent();
+  sh.getRange(EV_FIRST, 3, Math.max(last - EV_FIRST + 1, 1), 1).setNumberFormat('#,##0.##');
 }
 
 function cleanName_(name) {
@@ -323,16 +344,20 @@ function checkLines_(lines) {
     const key = l.type + '|' + l.item.toLowerCase();
     if (seen[key]) throw new Error('"' + l.item + '" is listed twice');
     seen[key] = true;
-    l.expected = num_(l.expected);
-    if (l.expected < 0) throw new Error('Expected amount cannot be negative');
+    l.units = l.units === '' || l.units == null ? 1 : num_(l.units);
+    l.amount = num_(l.amount);
+    if (!(l.units > 0)) throw new Error('Units for "' + l.item + '" must be more than 0');
+    if (l.amount < 0) throw new Error('Amount for "' + l.item + '" cannot be negative');
   });
 }
 
 function budgetRow_(sh, r, l) {
-  sh.getRange(r, 1, 1, 3).setValues([[l.type, l.item, l.expected]]);
-  sh.getRange(r, 4).setFormula(`=SUMIFS($L$${EV_FIRST}:$L,$H$${EV_FIRST}:$H,A${r},$I$${EV_FIRST}:$I,B${r})`);
-  sh.getRange(r, 5).setFormula(`=D${r}-C${r}`);
-  sh.getRange(r, 3, 1, 3).setNumberFormat('#,##0.00');
+  sh.getRange(r, 1, 1, 4).setValues([[l.type, l.item, l.units, l.amount]]);
+  sh.getRange(r, 5).setFormula(`=C${r}*D${r}`);
+  sh.getRange(r, 6).setFormula(`=SUMIFS($N$${EV_FIRST}:$N,$J$${EV_FIRST}:$J,A${r},$K$${EV_FIRST}:$K,B${r})`);
+  sh.getRange(r, 7).setFormula(`=F${r}-E${r}`);
+  sh.getRange(r, 3).setNumberFormat('#,##0.##');
+  sh.getRange(r, 4, 1, 4).setNumberFormat('#,##0.00');
 }
 
 function createEvent_(d) {
@@ -346,48 +371,51 @@ function createEvent_(d) {
   sh.getRange('A1').setValue('Event: ' + name).setFontSize(14).setFontWeight('bold');
   sh.getRange('A2').setValue('Net (revenue − expenses)');
   const net = col => `=SUMIF($A$${EV_FIRST}:$A,"Revenue",${col}$${EV_FIRST}:${col})-SUMIF($A$${EV_FIRST}:$A,"Expense",${col}$${EV_FIRST}:${col})`;
-  sh.getRange('C2').setFormula(net('C'));
-  sh.getRange('D2').setFormula(net('D'));
-  sh.getRange('E2').setFormula('=D2-C2');
-  sh.getRange('C2:E2').setNumberFormat('#,##0.00').setFontWeight('bold');
+  sh.getRange('E2').setFormula(net('E'));
+  sh.getRange('F2').setFormula(net('F'));
+  sh.getRange('G2').setFormula('=F2-E2');
+  sh.getRange('E2:G2').setNumberFormat('#,##0.00').setFontWeight('bold');
   sh.getRange('A3').setValue('BUDGET (EGP)').setFontWeight('bold');
-  sh.getRange('G3').setValue('EVENT CASH FLOW').setFontWeight('bold');
-  sh.getRange('A4:E4').setValues([['Type', 'Item', 'Expected (EGP)', 'Actual (EGP)', 'Difference']]);
-  sh.getRange('G4:M4').setValues([['Date', 'Type', 'Item', 'Currency', 'Amount', 'EGP equivalent', 'Description']]);
-  sh.getRange('A4:E4').setFontWeight('bold').setBackground('#e8f1fd');
-  sh.getRange('G4:M4').setFontWeight('bold').setBackground('#e8f1fd');
+  sh.getRange('I3').setValue('EVENT CASH FLOW').setFontWeight('bold');
+  sh.getRange('A4:G4').setValues([['Type', 'Item', 'Units', 'Amount per unit (EGP)', 'Budgeted (EGP)', 'Actual (EGP)', 'Difference']]);
+  sh.getRange('I4:O4').setValues([['Date', 'Type', 'Item', 'Currency', 'Amount', 'EGP equivalent', 'Description']]);
+  sh.getRange('A4:G4').setFontWeight('bold').setBackground('#e8f1fd');
+  sh.getRange('I4:O4').setFontWeight('bold').setBackground('#e8f1fd');
   const sorted = lines.filter(l => l.type === 'Revenue').concat(lines.filter(l => l.type === 'Expense'));
   sorted.forEach((l, i) => budgetRow_(sh, EV_FIRST + i, l));
   sh.setFrozenRows(4);
-  sh.setColumnWidth(2, 180); sh.setColumnWidth(9, 180); sh.setColumnWidth(13, 240);
+  sh.setColumnWidth(2, 180); sh.setColumnWidth(11, 180); sh.setColumnWidth(15, 240);
   return { name };
 }
 
 function addEventLine_(d) {
   const sh = eventSheet_(d.name);
   const ev = getEvent_(d.name);
-  const l = { type: d.type, item: d.item, expected: d.expected };
-  checkLines_(ev.lines.map(x => ({ type: x.type, item: x.item, expected: x.expected })).concat([l]));
+  const l = { type: d.type, item: d.item, units: d.units, amount: d.amount };
+  checkLines_(ev.lines.map(x => ({ type: x.type, item: x.item, units: x.units, amount: x.amount })).concat([l]));
   budgetRow_(sh, EV_FIRST + ev.lines.length, l);
   return {};
 }
 
 function listEvents_() {
   return ss_().getSheets().map(s => s.getName()).filter(n => n.indexOf(EVENT_PREFIX) === 0).map(n => {
-    const v = ss_().getSheetByName(n).getRange('C2:D2').getValues()[0];
-    return { name: n.slice(EVENT_PREFIX.length), expectedNet: num_(v[0]), actualNet: num_(v[1]) };
+    const sh = ss_().getSheetByName(n);
+    upgradeEvent_(sh);
+    const v = sh.getRange('E2:F2').getValues()[0];
+    return { name: n.slice(EVENT_PREFIX.length), budgetedNet: num_(v[0]), actualNet: num_(v[1]) };
   });
 }
 
 function getEvent_(name) {
   const sh = eventSheet_(name);
   const last = Math.max(sh.getLastRow(), EV_FIRST);
-  const budget = sh.getRange(EV_FIRST, 1, last - EV_FIRST + 1, 3).getValues().filter(r => r[1] !== '');
-  const flow = sh.getRange(EV_FIRST, 7, last - EV_FIRST + 1, 7).getValues().filter(r => r[2] !== '');
+  const budget = sh.getRange(EV_FIRST, 1, last - EV_FIRST + 1, 4).getValues().filter(r => r[1] !== '');
+  const flow = sh.getRange(EV_FIRST, FLOW_COL, last - EV_FIRST + 1, 7).getValues().filter(r => r[2] !== '');
   const entries = flow.map(r => ({ date: ymd_(r[0]), type: r[1], item: r[2], currency: r[3], amount: num_(r[4]), egp: num_(r[5]), description: String(r[6]) }));
   const lines = budget.map(r => {
     const actual = entries.filter(e => e.type === r[0] && e.item === r[1]).reduce((s, e) => s + e.egp, 0);
-    return { type: r[0], item: r[1], expected: num_(r[2]), actual };
+    const units = num_(r[2]), amount = num_(r[3]);
+    return { type: r[0], item: r[1], units, amount, budgeted: units * amount, actual };
   });
   return { name, lines, entries: entries.reverse() };
 }
@@ -405,7 +433,7 @@ function addEventEntry_(d) {
   const rate = d.currency === 'EGP' ? 1 : rates_(blockFor_(date))[d.currency];
   if (!rate) throw new Error('No exchange rate for ' + d.currency + ' in the sheet');
   const row = EV_FIRST + ev.entries.length;
-  sh.getRange(row, 7, 1, 7).setValues([[date, d.type, line.item, d.currency, amount, amount * rate, String(d.description || '').trim()]]);
-  sh.getRange(row, 11, 1, 2).setNumberFormat('#,##0.00');
+  sh.getRange(row, FLOW_COL, 1, 7).setValues([[date, d.type, line.item, d.currency, amount, amount * rate, String(d.description || '').trim()]]);
+  sh.getRange(row, FLOW_COL + 4, 1, 2).setNumberFormat('#,##0.00');
   return { row };
 }

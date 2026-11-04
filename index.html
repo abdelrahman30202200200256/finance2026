@@ -276,13 +276,17 @@
             <label>Type</label>
             <div class="seg type" id="elType"><button data-v="Revenue" class="on">Revenue</button><button data-v="Expense">Expense</button></div>
             <label>Name</label><input id="elItem" placeholder="e.g. Sponsorship">
-            <label>Expected amount (EGP)</label><input type="number" id="elExpected" min="0" step="0.01">
+            <div class="row">
+              <div><label>Units</label><input type="number" id="elUnits" min="0" step="any" value="1"></div>
+              <div><label>Amount per unit (EGP)</label><input type="number" id="elAmount" min="0" step="0.01"></div>
+            </div>
+            <p class="muted small" id="elTotal" style="margin:8px 0 0">Budgeted: 0 EGP</p>
             <button class="btn full" id="elSave">Add line</button>
           </div>
         </div>
       </div>
       <div>
-        <div class="card"><h3>Budget: expected vs. actual (EGP)</h3><div class="table-wrap"><table id="evBudget"></table></div></div>
+        <div class="card"><h3>Budget: budgeted vs. actual (EGP)</h3><div class="table-wrap"><table id="evBudget"></table></div></div>
         <div class="card"><h3>Event cash flow</h3><div class="table-wrap"><table id="evEntries"></table></div></div>
       </div>
     </div>
@@ -493,7 +497,7 @@ async function loadEvents() {
   try {
     const list = await api('listEvents');
     $('eventList').innerHTML = list.length ? list.map(ev => `<div class="item" data-name="${esc(ev.name)}">
-        <div><b>${esc(ev.name)}</b><div class="muted small">Expected net ${fmt(ev.expectedNet)} EGP · Actual net ${fmt(ev.actualNet)} EGP</div></div>
+        <div><b>${esc(ev.name)}</b><div class="muted small">Budgeted net ${fmt(ev.budgetedNet)} EGP · Actual net ${fmt(ev.actualNet)} EGP</div></div>
         <span class="muted">›</span></div>`).join('')
       : '<p class="muted">No events yet. Click “Create event budget” to start.</p>';
   } catch (err) { $('eventList').innerHTML = ''; toast(err.message, true); }
@@ -501,7 +505,7 @@ async function loadEvents() {
 $('eventList').addEventListener('click', e => { const it = e.target.closest('.item'); if (it) location.hash = 'event/' + encodeURIComponent(it.dataset.name); });
 
 // ===================================================================== new event wizard
-const WZ_STEPS = ['1. Event name', '2. Revenue lines', '3. Expense lines', '4. Expected amounts', '5. Review'];
+const WZ_STEPS = ['1. Event name', '2. Revenue lines', '3. Expense lines', '4. Budgeted amounts', '5. Review'];
 let wz = null;
 function wzStart() { wz = { step: 0, name: '', revenue: [{ item: '' }], expense: [{ item: '' }] }; wzRender(); }
 
@@ -521,19 +525,23 @@ function wzRender() {
   if (wz.step === 1) b.innerHTML = wzLinesHtml('revenue');
   if (wz.step === 2) b.innerHTML = wzLinesHtml('expense');
   if (wz.step === 3) {
-    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="2">${title}</td></tr>` + wz[kind].map((l, i) =>
-      `<tr><td>${esc(l.item)}</td><td style="width:200px"><input type="number" min="0" step="0.01" data-kind="${kind}" data-i="${i}" value="${l.expected ?? ''}" placeholder="0"></td></tr>`).join('') : '';
-    b.innerHTML = `<p class="muted">Fill the expected amount for each line, in EGP.</p><div class="table-wrap"><table style="max-width:560px">
-      <tr><th>Item</th><th>Expected (EGP)</th></tr>${rows('revenue', 'Revenue')}${rows('expense', 'Expenses')}</table></div>`;
+    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="4">${title}</td></tr>` + wz[kind].map((l, i) =>
+      `<tr><td>${esc(l.item)}</td>
+        <td style="width:110px"><input type="number" min="0" step="any" data-kind="${kind}" data-i="${i}" data-f="units" value="${l.units ?? 1}"></td>
+        <td style="width:170px"><input type="number" min="0" step="0.01" data-kind="${kind}" data-i="${i}" data-f="amount" value="${l.amount ?? ''}" placeholder="0"></td>
+        <td class="num" style="width:150px" data-total="${kind}-${i}">${fmt(budgeted(l), 2)}</td></tr>`).join('') : '';
+    b.innerHTML = `<p class="muted">For each line, fill how many <b>units</b> and the <b>amount per unit</b> in EGP. Example: 17 rooms × 200 = 3,400. For a single payment, keep units = 1.</p>
+      <div class="table-wrap"><table style="max-width:760px">
+      <tr><th>Item</th><th>Units</th><th>Amount per unit (EGP)</th><th class="num">Budgeted (EGP)</th></tr>${rows('revenue', 'Revenue')}${rows('expense', 'Expenses')}</table></div>`;
   }
   if (wz.step === 4) {
-    const sum = k => wz[k].reduce((s, l) => s + (Number(l.expected) || 0), 0);
-    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="2">${title}</td></tr>` + wz[kind].map(l =>
-      `<tr><td>${esc(l.item)}</td><td class="num">${fmt(l.expected || 0, 2)}</td></tr>`).join('') +
-      `<tr class="total"><td>Total ${title.toLowerCase()}</td><td class="num">${fmt(sum(kind), 2)}</td></tr>` : '';
-    b.innerHTML = `<h3>${esc(wz.name)}</h3><div class="table-wrap"><table style="max-width:560px"><tr><th>Item</th><th class="num">Expected (EGP)</th></tr>
+    const sum = k => wz[k].reduce((s, l) => s + budgeted(l), 0);
+    const rows = (kind, title) => wz[kind].length ? `<tr class="group"><td colspan="3">${title}</td></tr>` + wz[kind].map(l =>
+      `<tr><td>${esc(l.item)}</td><td class="num muted">${fmt(l.units, 2).replace(/\.00$/, '')} × ${fmt(l.amount, 2)}</td><td class="num">${fmt(budgeted(l), 2)}</td></tr>`).join('') +
+      `<tr class="total"><td colspan="2">Total ${title.toLowerCase()}</td><td class="num">${fmt(sum(kind), 2)}</td></tr>` : '';
+    b.innerHTML = `<h3>${esc(wz.name)}</h3><div class="table-wrap"><table style="max-width:680px"><tr><th>Item</th><th class="num">Units × amount</th><th class="num">Budgeted (EGP)</th></tr>
       ${rows('revenue', 'Revenue')}${rows('expense', 'Expenses')}
-      <tr class="total"><td>Expected net (revenue − expenses)</td><td class="num">${money(sum('revenue') - sum('expense'), 2)}</td></tr></table></div>
+      <tr class="total"><td colspan="2">Budgeted net (revenue − expenses)</td><td class="num">${money(sum('revenue') - sum('expense'), 2)}</td></tr></table></div>
       <p class="muted small">Clicking “Create event” adds a new tab “[EVENT] ${esc(wz.name)}” to the finance sheet, with the event's own cash flow.</p>`;
   }
   $('wzBack').style.visibility = wz.step === 0 ? 'hidden' : 'visible';
@@ -546,11 +554,22 @@ function wzCollect() {
     const kind = wz.step === 1 ? 'revenue' : 'expense';
     wz[kind] = [...$('wzBody').querySelectorAll('.line-row[data-i]')].map(r => {
       const old = wz[kind][r.dataset.i] || {};
-      return { item: r.querySelector('[data-f=item]').value.trim(), expected: old.expected };
+      return { item: r.querySelector('[data-f=item]').value.trim(), units: old.units, amount: old.amount };
     });
   }
-  if (wz.step === 3) $('wzBody').querySelectorAll('input[data-kind]').forEach(i => { wz[i.dataset.kind][i.dataset.i].expected = i.value === '' ? '' : Number(i.value); });
+  if (wz.step === 3) $('wzBody').querySelectorAll('input[data-kind]').forEach(i => { wz[i.dataset.kind][i.dataset.i][i.dataset.f] = i.value === '' ? '' : Number(i.value); });
 }
+
+// Budgeted = units × amount per unit (units default to 1)
+function budgeted(l) { const u = l.units === '' || l.units == null ? 1 : Number(l.units); return (u || 0) * (Number(l.amount) || 0); }
+
+// Live total while typing units / amount
+$('wzBody').addEventListener('input', e => {
+  const i = e.target; if (wz.step !== 3 || !i.dataset.kind) return;
+  wz[i.dataset.kind][i.dataset.i][i.dataset.f] = i.value === '' ? '' : Number(i.value);
+  const cell = $('wzBody').querySelector(`[data-total="${i.dataset.kind}-${i.dataset.i}"]`);
+  if (cell) cell.textContent = fmt(budgeted(wz[i.dataset.kind][i.dataset.i]), 2);
+});
 
 function wzValidate() {
   if (wz.step === 0 && !wz.name) throw new Error('Write the event name');
@@ -565,8 +584,10 @@ function wzValidate() {
     if (wz.step === 2 && !wz.revenue.length && !wz.expense.length) throw new Error('Add at least one revenue or expense line');
   }
   if (wz.step === 3) [...wz.revenue, ...wz.expense].forEach(l => {
-    if (l.expected === '' || l.expected == null || isNaN(l.expected)) throw new Error(`Fill the expected amount for "${l.item}"`);
-    if (l.expected < 0) throw new Error('Amounts cannot be negative');
+    if (l.units === '' || l.units == null) l.units = 1;
+    if (!(l.units > 0)) throw new Error(`Units for "${l.item}" must be more than 0`);
+    if (l.amount === '' || l.amount == null || isNaN(l.amount)) throw new Error(`Fill the amount per unit for "${l.item}"`);
+    if (l.amount < 0) throw new Error('Amounts cannot be negative');
   });
 }
 
@@ -578,8 +599,8 @@ $('wzBack').addEventListener('click', () => { wzCollect(); wz.step--; wzRender()
 $('wzNext').addEventListener('click', e => busy(e.target, async () => {
   wzCollect(); wzValidate();
   if (wz.step < 4) { wz.step++; wzRender(); return; }
-  const lines = wz.revenue.map(l => ({ type: 'Revenue', item: l.item, expected: l.expected }))
-    .concat(wz.expense.map(l => ({ type: 'Expense', item: l.item, expected: l.expected })));
+  const lines = wz.revenue.map(l => ({ type: 'Revenue', item: l.item, units: l.units, amount: l.amount }))
+    .concat(wz.expense.map(l => ({ type: 'Expense', item: l.item, units: l.units, amount: l.amount })));
   const r = await api('createEvent', { name: wz.name, lines });
   toast('Event created');
   location.hash = 'event/' + encodeURIComponent(r.name);
@@ -596,24 +617,26 @@ async function loadEvent(name) {
 
 function renderEvent() {
   const s = (type, f) => EV.lines.filter(l => l.type === type).reduce((a, l) => a + l[f], 0);
-  const er = s('Revenue', 'expected'), ar = s('Revenue', 'actual'), ee = s('Expense', 'expected'), ae = s('Expense', 'actual');
-  $('evTiles').innerHTML = tile('Revenue · actual / expected', `${fmt(ar)}`, `of ${fmt(er)} EGP`) +
-    tile('Expenses · actual / expected', `${fmt(ae)}`, `of ${fmt(ee)} EGP`) +
-    tile('Net · actual', money(ar - ae), `expected ${fmt(er - ee)} EGP`);
+  const br = s('Revenue', 'budgeted'), ar = s('Revenue', 'actual'), be = s('Expense', 'budgeted'), ae = s('Expense', 'actual');
+  $('evTiles').innerHTML = tile('Revenue · actual / budgeted', `${fmt(ar)}`, `of ${fmt(br)} EGP`) +
+    tile('Expenses · actual / budgeted', `${fmt(ae)}`, `of ${fmt(be)} EGP`) +
+    tile('Net · actual', money(ar - ae), `budgeted ${fmt(br - be)} EGP`);
 
+  const units = n => fmt(n, 2).replace(/\.00$/, '');
   const rows = type => {
     const list = EV.lines.filter(l => l.type === type);
     if (!list.length) return '';
     return `<tr class="group"><td colspan="5">${type === 'Revenue' ? 'Revenue' : 'Expenses'}</td></tr>` + list.map(l => {
-      const p = l.expected ? Math.min(100, l.actual / l.expected * 100) : (l.actual ? 100 : 0);
-      const over = type === 'Expense' && l.actual > l.expected;
-      const diff = l.actual - l.expected;
+      const p = l.budgeted ? Math.min(100, l.actual / l.budgeted * 100) : (l.actual ? 100 : 0);
+      const over = type === 'Expense' && l.actual > l.budgeted;
+      const diff = l.actual - l.budgeted;
       return `<tr><td><b>${esc(l.item)}</b><div class="bar"><span class="${over ? 'over' : ''}" style="width:${p}%"></span></div></td>
-        <td class="num">${fmt(l.expected)}</td><td class="num">${fmt(l.actual)}</td>
+        <td class="num muted">${units(l.units)} × ${fmt(l.amount)}</td>
+        <td class="num">${fmt(l.budgeted)}</td><td class="num">${fmt(l.actual)}</td>
         <td class="num ${(type === 'Expense' ? diff > 0 : diff < 0) ? 'neg' : diff ? 'pos' : ''}">${diff > 0 ? '+' : ''}${fmt(diff)}</td></tr>`;
-    }).join('') + `<tr class="total"><td>Total</td><td class="num">${fmt(s(type, 'expected'))}</td><td class="num">${fmt(s(type, 'actual'))}</td><td class="num">${fmt(s(type, 'actual') - s(type, 'expected'))}</td></tr>`;
+    }).join('') + `<tr class="total"><td colspan="2">Total</td><td class="num">${fmt(s(type, 'budgeted'))}</td><td class="num">${fmt(s(type, 'actual'))}</td><td class="num">${fmt(s(type, 'actual') - s(type, 'budgeted'))}</td></tr>`;
   };
-  $('evBudget').innerHTML = '<tr><th>Item</th><th class="num">Expected</th><th class="num">Actual</th><th class="num">Difference</th></tr>' + rows('Revenue') + rows('Expense');
+  $('evBudget').innerHTML = '<tr><th>Item</th><th class="num">Units × amount</th><th class="num">Budgeted</th><th class="num">Actual</th><th class="num">Difference</th></tr>' + rows('Revenue') + rows('Expense');
 
   $('evEntries').innerHTML = '<tr><th>Date</th><th>Item</th><th>Description</th><th class="num">Amount</th><th class="num">EGP</th></tr>' +
     (EV.entries.length ? EV.entries.map(x => `<tr><td class="small">${esc(x.date)}</td><td>${esc(x.item)} <span class="pill ${x.type === 'Revenue' ? 'good' : 'bad'}">${x.type}</span></td>
@@ -642,13 +665,17 @@ $('evSave').addEventListener('click', e => busy(e.target, async () => {
   EV = await api('getEvent', { name: EV.name }); renderEvent();
 }));
 
+function elTotal() { $('elTotal').textContent = 'Budgeted: ' + fmt(budgeted({ units: $('elUnits').value, amount: $('elAmount').value }), 2) + ' EGP'; }
+$('elUnits').addEventListener('input', elTotal);
+$('elAmount').addEventListener('input', elTotal);
 $('evLineToggle').addEventListener('click', () => $('evLineForm').classList.toggle('hidden'));
 $('elSave').addEventListener('click', e => busy(e.target, async () => {
-  const data = { name: EV.name, type: segValue('elType'), item: $('elItem').value.trim(), expected: Number($('elExpected').value) || 0 };
+  const data = { name: EV.name, type: segValue('elType'), item: $('elItem').value.trim(), units: $('elUnits').value === '' ? 1 : Number($('elUnits').value), amount: Number($('elAmount').value) || 0 };
   if (!data.item) throw new Error('Write a name');
+  if (!(data.units > 0)) throw new Error('Units must be more than 0');
   await api('addEventLine', data);
   toast('Budget line added');
-  $('elItem').value = ''; $('elExpected').value = ''; $('evLineForm').classList.add('hidden');
+  $('elItem').value = ''; $('elUnits').value = '1'; $('elAmount').value = ''; elTotal(); $('evLineForm').classList.add('hidden');
   EV = await api('getEvent', { name: EV.name }); renderEvent();
 }));
 
@@ -746,15 +773,15 @@ async function demoApi(action, d) {
   if (action === 'addCashflow') return { row: addMain(d) };
   if (action === 'listEvents') return Object.values(D.events).map(ev => {
     const n = f => ev.lines.reduce((s, l) => s + (l.type === 'Revenue' ? 1 : -1) * l[f], 0);
-    return { name: ev.name, expectedNet: n('expected'), actualNet: n('actual') };
+    return { name: ev.name, budgetedNet: n('budgeted'), actualNet: n('actual') };
   });
   if (action === 'createEvent') {
     if (D.events[d.name]) throw new Error('An event with this name already exists');
-    D.events[d.name] = { name: d.name, lines: d.lines.map(l => Object.assign({ actual: 0 }, l, { expected: Number(l.expected) || 0 })), entries: [] };
+    D.events[d.name] = { name: d.name, lines: d.lines.map(l => Object.assign({ actual: 0 }, l, { budgeted: budgeted(l) })), entries: [] };
     return { name: d.name };
   }
   if (action === 'getEvent') { const ev = D.events[d.name]; if (!ev) throw new Error('Event not found'); return JSON.parse(JSON.stringify(ev)); }
-  if (action === 'addEventLine') { D.events[d.name].lines.push({ type: d.type, item: d.item, expected: d.expected, actual: 0 }); return {}; }
+  if (action === 'addEventLine') { D.events[d.name].lines.push({ type: d.type, item: d.item, units: d.units, amount: d.amount, budgeted: budgeted(d), actual: 0 }); return {}; }
   if (action === 'addEventEntry') {
     const ev = D.events[d.name], line = ev.lines.find(l => l.type === d.type && l.item === d.item);
     if (!(d.amount > 0)) throw new Error('Amount must be more than 0');
