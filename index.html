@@ -134,6 +134,17 @@
   .pill { display: inline-block; border-radius: 10px; padding: 1px 8px; font-size: 11px; font-weight: 600; border: 1px solid currentColor; }
   .pill.good { color: var(--good); }
   .pill.bad { color: var(--bad); }
+  /* Row buttons: edit / remove */
+  td.acts { white-space: nowrap; text-align: right; width: 1%; }
+  .act { background: none; border: 1px solid transparent; color: var(--muted); cursor: pointer; font-size: 14px; padding: 3px 7px; border-radius: 8px; line-height: 1; }
+  .act:hover { color: var(--gold); border-color: var(--line-soft); }
+  .act.del { filter: grayscale(1) brightness(1.4); }
+  .act.del:hover { filter: none; border-color: var(--bad); }
+  .act.ok { color: var(--good); font-weight: 700; }
+  tr.editing td { background: rgba(248,211,58,.07); }
+  .edit-ux { display: flex; align-items: center; gap: 6px; }
+  .edit-ux input { padding: 6px 8px; min-width: 70px; }
+  .edit-ux span { color: var(--gold); font-weight: 700; }
   .bar { height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; margin-top: 5px; min-width: 80px; }
   .bar span { display: block; height: 100%; background: linear-gradient(90deg, #5ea845, var(--gold)); }
   .bar span.over { background: var(--bad); }
@@ -597,17 +608,64 @@ async function loadEvent_(name) {
   const last = Math.max(info.rows, EV_FIRST);
   let [head, rows] = await read(A1(tab, 4, 3), A1(tab, EV_FIRST, 1, last, 15));
   if (String(head[0][0]).startsWith('Expected')) { await upgradeEvent(tab, rows, last); [rows] = await read(A1(tab, EV_FIRST, 1, last + 0, 15)); }
-  const entries = rows.filter(r => filled(r[FLOW_COL + 1])).map(r => {
-    const f = r.slice(FLOW_COL - 1);
-    return { date: ymd(f[0]), type: f[1], item: f[2], currency: f[3], amount: num(f[4]), egp: num(f[5]), description: String(f[6]) };
+  const entries = [], lines = [];
+  rows.forEach((r, i) => {
+    const f = r.slice(FLOW_COL - 1, FLOW_COL + 6);
+    if (filled(f[2])) entries.push({ row: EV_FIRST + i, raw: f, date: ymd(f[0]), type: f[1], item: f[2], currency: f[3], amount: num(f[4]), egp: num(f[5]), description: String(f[6]) });
   });
-  const lines = rows.filter(r => filled(r[1])).map(r => {
+  rows.forEach((r, i) => {
+    if (!filled(r[1])) return;
     const units = num(r[2]), amount = num(r[3]);
     const actual = entries.filter(e => e.type === r[0] && e.item === r[1]).reduce((s, e) => s + e.egp, 0);
-    return { type: r[0], item: r[1], units, amount, budgeted: units * amount, actual };
+    lines.push({ row: EV_FIRST + i, type: r[0], item: r[1], units, amount, budgeted: units * amount, actual });
   });
-  return { name, lines, entries: entries.reverse() };
+  return { name, lines, entries: entries.slice().reverse(), flow: entries };
 }
+
+// Find a budget line / entry again right before changing it (someone else may have changed the sheet meanwhile).
+async function findInEvent(d, kind) {
+  await refreshMeta();
+  const ev = await loadEvent_(d.name);
+  const list = kind === 'line' ? ev.lines : ev.flow;
+  const x = list.find(o => o.row === d.row && o.item === d.item && o.type === d.type);
+  if (!x) throw new Error('This row changed in the sheet meanwhile. The page is reloaded, please try again.');
+  return { ev, x, tab: EVENT_PREFIX + d.name };
+}
+
+// Rewrite the budget block (A..G) and/or the cash flow block (I..O) from row 5, then clear the rows that became empty.
+function rewriteOps(tab, oldCount, keep, cols, toValues) {
+  const ops = [];
+  if (keep.length) ops.push({ op: 'set', range: A1(tab, EV_FIRST, cols[0], EV_FIRST + keep.length - 1, cols[1]), values: keep.map((x, i) => toValues(x, EV_FIRST + i)) });
+  if (oldCount > keep.length) ops.push({ op: 'clear', range: A1(tab, EV_FIRST + keep.length, cols[0], EV_FIRST + oldCount - 1, cols[1]) });
+  return ops;
+}
+
+Object.assign(LOGIC, {
+  async updateEventLine(d) {
+    const { tab, x } = await findInEvent(d, 'line');
+    const units = d.units === '' || d.units == null ? 1 : num(d.units), amount = num(d.amount);
+    if (!(units > 0)) throw new Error('Units must be more than 0');
+    if (amount < 0) throw new Error('Amount cannot be negative');
+    await write([{ op: 'set', range: A1(tab, x.row, 3, x.row, 4), values: [[units, amount]] }]);
+    return {};
+  },
+
+  async deleteEventLine(d) {
+    const { ev, tab, x } = await findInEvent(d, 'line');
+    const keepLines = ev.lines.filter(l => l !== x);
+    const keepFlow = ev.flow.filter(e => !(e.type === x.type && e.item === x.item)); // its entries go too
+    const ops = rewriteOps(tab, ev.lines.length, keepLines, [1, 7], (l, r) => budgetRow(l, r));
+    if (keepFlow.length !== ev.flow.length) ops.push(...rewriteOps(tab, ev.flow.length, keepFlow, [FLOW_COL, FLOW_COL + 6], e => e.raw));
+    await write(ops);
+    return { removedEntries: ev.flow.length - keepFlow.length };
+  },
+
+  async deleteEventEntry(d) {
+    const { ev, tab, x } = await findInEvent(d, 'entry');
+    await write(rewriteOps(tab, ev.flow.length, ev.flow.filter(e => e !== x), [FLOW_COL, FLOW_COL + 6], e => e.raw));
+    return {};
+  },
+});
 
 // Event tabs made before "units × amount": add Units + Amount columns (old amount = 1 unit × amount).
 async function upgradeEvent(tab, oldRows, last) {
@@ -918,6 +976,7 @@ $('wzNext').addEventListener('click', e => busy(e.target, async () => {
 let EV = null;
 async function loadEvent(name) {
   $('evTitle').textContent = name;
+  EDIT_ROW = null;
   $('evBudget').innerHTML = '<tr><td class="muted">Loading…</td></tr>'; $('evEntries').innerHTML = ''; $('evTiles').innerHTML = '';
   try { EV = await api('getEvent', { name }); renderEvent(); }
   catch (err) { toast(err.message, true); }
@@ -934,24 +993,74 @@ function renderEvent() {
   const rows = type => {
     const list = EV.lines.filter(l => l.type === type);
     if (!list.length) return '';
-    return `<tr class="group"><td colspan="5">${type === 'Revenue' ? 'Revenue' : 'Expenses'}</td></tr>` + list.map(l => {
+    return `<tr class="group"><td colspan="6">${type === 'Revenue' ? 'Revenue' : 'Expenses'}</td></tr>` + list.map(l => {
       const p = l.budgeted ? Math.min(100, l.actual / l.budgeted * 100) : (l.actual ? 100 : 0);
       const over = type === 'Expense' && l.actual > l.budgeted;
       const diff = l.actual - l.budgeted;
+      const key = `data-row="${l.row}" data-type="${esc(l.type)}" data-item="${esc(l.item)}"`;
+      if (EDIT_ROW === l.row) return `<tr class="editing"><td><b>${esc(l.item)}</b></td>
+        <td colspan="2"><div class="edit-ux"><input type="number" min="0" step="any" id="edUnits" value="${l.units}" title="Units"><span>×</span>
+          <input type="number" min="0" step="0.01" id="edAmount" value="${l.amount}" title="Amount per unit (EGP)"></div>
+          <div class="small muted" id="edTotal">= ${fmt(l.budgeted, 2)} EGP</div></td>
+        <td class="num">${fmt(l.actual)}</td><td></td>
+        <td class="acts"><button class="act ok" data-act="save" ${key} title="Save">✔</button><button class="act" data-act="cancel" title="Cancel">✕</button></td></tr>`;
       return `<tr><td><b>${esc(l.item)}</b><div class="bar"><span class="${over ? 'over' : ''}" style="width:${p}%"></span></div></td>
         <td class="num muted">${units(l.units)} × ${fmt(l.amount)}</td>
         <td class="num">${fmt(l.budgeted)}</td><td class="num">${fmt(l.actual)}</td>
-        <td class="num ${(type === 'Expense' ? diff > 0 : diff < 0) ? 'neg' : diff ? 'pos' : ''}">${diff > 0 ? '+' : ''}${fmt(diff)}</td></tr>`;
-    }).join('') + `<tr class="total"><td colspan="2">Total</td><td class="num">${fmt(s(type, 'budgeted'))}</td><td class="num">${fmt(s(type, 'actual'))}</td><td class="num">${fmt(s(type, 'actual') - s(type, 'budgeted'))}</td></tr>`;
+        <td class="num ${(type === 'Expense' ? diff > 0 : diff < 0) ? 'neg' : diff ? 'pos' : ''}">${diff > 0 ? '+' : ''}${fmt(diff)}</td>
+        <td class="acts"><button class="act" data-act="edit" ${key} title="Edit units / amount">✎</button><button class="act del" data-act="delLine" ${key} title="Remove this line">🗑</button></td></tr>`;
+    }).join('') + `<tr class="total"><td colspan="2">Total</td><td class="num">${fmt(s(type, 'budgeted'))}</td><td class="num">${fmt(s(type, 'actual'))}</td><td class="num">${fmt(s(type, 'actual') - s(type, 'budgeted'))}</td><td></td></tr>`;
   };
-  $('evBudget').innerHTML = '<tr><th>Item</th><th class="num">Units × amount</th><th class="num">Budgeted</th><th class="num">Actual</th><th class="num">Difference</th></tr>' + rows('Revenue') + rows('Expense');
+  $('evBudget').innerHTML = '<tr><th>Item</th><th class="num">Units × amount</th><th class="num">Budgeted</th><th class="num">Actual</th><th class="num">Difference</th><th></th></tr>' + rows('Revenue') + rows('Expense');
 
-  $('evEntries').innerHTML = '<tr><th>Date</th><th>Item</th><th>Description</th><th class="num">Amount</th><th class="num">EGP</th></tr>' +
+  $('evEntries').innerHTML = '<tr><th>Date</th><th>Item</th><th>Description</th><th class="num">Amount</th><th class="num">EGP</th><th></th></tr>' +
     (EV.entries.length ? EV.entries.map(x => `<tr><td class="small">${esc(x.date)}</td><td>${esc(x.item)} <span class="pill ${x.type === 'Revenue' ? 'good' : 'bad'}">${x.type}</span></td>
-      <td>${esc(x.description)}</td><td class="num">${fmt(x.amount, 2)} ${esc(x.currency)}</td><td class="num">${fmt(x.egp)}</td></tr>`).join('')
-      : '<tr><td colspan="5" class="muted">Nothing added yet</td></tr>');
+      <td>${esc(x.description)}</td><td class="num">${fmt(x.amount, 2)} ${esc(x.currency)}</td><td class="num">${fmt(x.egp)}</td>
+      <td class="acts"><button class="act del" data-act="delEntry" data-row="${x.row}" data-type="${esc(x.type)}" data-item="${esc(x.item)}" title="Remove this entry">🗑</button></td></tr>`).join('')
+      : '<tr><td colspan="6" class="muted">Nothing added yet</td></tr>');
   fillEvItems();
+  if (EDIT_ROW) { const u = $('edUnits'); if (u) { u.focus(); u.select(); } }
 }
+
+// ---- edit / remove rows of an event
+let EDIT_ROW = null;
+async function reloadEvent() { EV = await api('getEvent', { name: EV.name }); renderEvent(); }
+function edTotal() { const t = $('edTotal'); if (t) t.textContent = '= ' + fmt(budgeted({ units: $('edUnits').value, amount: $('edAmount').value }), 2) + ' EGP'; }
+
+$('page-event').addEventListener('input', e => { if (e.target.id === 'edUnits' || e.target.id === 'edAmount') edTotal(); });
+$('page-event').addEventListener('keydown', e => {
+  if (!EDIT_ROW || (e.target.id !== 'edUnits' && e.target.id !== 'edAmount')) return;
+  if (e.key === 'Enter') { e.preventDefault(); document.querySelector('#evBudget [data-act="save"]').click(); }
+  if (e.key === 'Escape') { EDIT_ROW = null; renderEvent(); }
+});
+$('page-event').addEventListener('click', e => {
+  const b = e.target.closest('button.act'); if (!b) return;
+  const d = { name: EV.name, row: Number(b.dataset.row), type: b.dataset.type, item: b.dataset.item };
+  const act = b.dataset.act;
+  if (act === 'edit') { EDIT_ROW = d.row; renderEvent(); return; }
+  if (act === 'cancel') { EDIT_ROW = null; renderEvent(); return; }
+  busy(b, async () => {
+    try {
+      if (act === 'save') {
+        await api('updateEventLine', Object.assign(d, { units: $('edUnits').value, amount: $('edAmount').value }));
+        EDIT_ROW = null; toast(`"${d.item}" updated`);
+      }
+      if (act === 'delLine') {
+        const n = EV.flow.filter(x => x.type === d.type && x.item === d.item).length;
+        if (!confirm(`Remove the budget line "${d.item}"?` + (n ? `\n\nIts ${n} entr${n === 1 ? 'y' : 'ies'} in the event cash flow will be removed too.` : ''))) return;
+        const r = await api('deleteEventLine', d);
+        toast(`"${d.item}" removed` + (r.removedEntries ? ` with ${r.removedEntries} entr${r.removedEntries === 1 ? 'y' : 'ies'}` : ''));
+      }
+      if (act === 'delEntry') {
+        const x = EV.flow.find(o => o.row === d.row);
+        if (!confirm(`Remove this entry?\n\n${x.date} · ${x.item} · ${fmt(x.amount, 2)} ${x.currency}${x.description ? ' · ' + x.description : ''}`)) return;
+        await api('deleteEventEntry', d);
+        toast('Entry removed');
+      }
+      await reloadEvent();
+    } catch (err) { await reloadEvent().catch(() => {}); throw err; }
+  });
+});
 
 function fillEvItems() {
   const type = segValue('evType');
