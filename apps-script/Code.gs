@@ -5,13 +5,18 @@
  *   Extensions → Apps Script → replace everything in Code.gs → Save.
  * Then: Deploy → New deployment → type "Web app",
  *   Execute as: Me,  Who has access: Anyone  → Deploy → copy the Web app URL.
- * Reload the sheet; a menu "Finance website" appears → "Show API key".
- * Paste the URL and the key into the website once.
+ *   (Updating later: Deploy → Manage deployments → ✏️ → Version: New version → Deploy. The URL stays the same.)
+ *
+ * People log in to the website with a username + password.
+ * Add people from the sheet menu: Finance website → Add or change a user.
+ * Remove someone by deleting their row in the "Users" tab.
  */
 
 const MAIN = '[MAIN] Cashflow';
 const IS = '[NEW] Income Statement';
 const EVENT_PREFIX = '[EVENT] ';
+const USERS = 'Users';
+const SESSION_DAYS = 7;
 
 // Columns in [MAIN] Cashflow (1 = A)
 const C = { date: 4, paidEGP: 5, paidUSD: 7, paidEUR: 8, recEGP: 9, recUSD: 10, recEUR: 11,
@@ -26,19 +31,23 @@ function doPost(e) {
   let out;
   try {
     const req = JSON.parse(e.postData.contents);
-    if (req.key !== apiKey_()) throw new Error('Wrong API key');
-    out = { ok: true, data: route_(req.action, req.data || {}) };
+    if (req.action === 'login') out = { ok: true, data: login_(req.data || {}) };
+    else if (req.action === 'logout') { logout_(req.token); out = { ok: true, data: {} }; }
+    else {
+      const user = checkSession_(req.token);
+      out = { ok: true, data: route_(req.action, req.data || {}, user) };
+    }
   } catch (err) {
-    out = { ok: false, error: err.message };
+    out = { ok: false, error: err.message, loginNeeded: !!err.loginNeeded };
   }
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
-function route_(action, d) {
+function route_(action, d, user) {
   switch (action) {
-    case 'init': return init_();
+    case 'init': return Object.assign(init_(), { user: user });
     case 'cashflow': return cashflow_(d.month);
-    case 'addCashflow': return withLock_(() => addCashflow_(d));
+    case 'addCashflow': return withLock_(() => addCashflow_(d, user));
     case 'listEvents': return listEvents_();
     case 'createEvent': return withLock_(() => createEvent_(d));
     case 'getEvent': return getEvent_(d.name);
@@ -54,21 +63,116 @@ function withLock_(fn) {
   try { return fn(); } finally { lock.releaseLock(); }
 }
 
-// ---------------------------------------------------------------- API key
-function apiKey_() {
+// ---------------------------------------------------------------- login
+// "Users" tab: A Username | B Password (stored scrambled) | C Added on
+function usersSheet_() {
+  let sh = ss_().getSheetByName(USERS);
+  if (!sh) {
+    sh = ss_().insertSheet(USERS);
+    sh.getRange('A1:C1').setValues([['Username', 'Password (scrambled — set it from the menu)', 'Added on']]).setFontWeight('bold').setBackground('#e8f1fd');
+    sh.setFrozenRows(1); sh.setColumnWidth(1, 180); sh.setColumnWidth(2, 380);
+  }
+  return sh;
+}
+
+function findUser_(username) {
+  const u = String(username || '').trim().toLowerCase();
+  if (!u) return null;
+  const sh = usersSheet_();
+  const last = sh.getLastRow();
+  if (last < 2) return null;
+  const rows = sh.getRange(2, 1, last - 1, 2).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]).trim().toLowerCase() === u) return { row: i + 2, name: String(rows[i][0]).trim(), hash: String(rows[i][1]) };
+  }
+  return null;
+}
+
+function hash_(salt, password) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + '|' + password, Utilities.Charset.UTF_8);
+  return bytes.map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+}
+function makeHash_(password) { const salt = Utilities.getUuid().replace(/-/g, '').slice(0, 16); return 'h$' + salt + '$' + hash_(salt, password); }
+function checkHash_(stored, password) {
+  const p = String(stored).split('$');
+  if (p.length !== 3 || p[0] !== 'h') return false;
+  return hash_(p[1], password) === p[2];
+}
+
+function loginError_(msg) { const e = new Error(msg); e.loginNeeded = true; return e; }
+
+function login_(d) {
+  const cache = CacheService.getScriptCache();
+  const key = 'fail_' + String(d.username || '').trim().toLowerCase();
+  const fails = Number(cache.get(key) || 0);
+  if (fails >= 5) throw loginError_('Too many wrong tries. Wait 10 minutes and try again.');
+  const u = findUser_(d.username);
+  if (!u || !checkHash_(u.hash, String(d.password || ''))) {
+    cache.put(key, String(fails + 1), 600);
+    throw loginError_('Wrong username or password');
+  }
+  cache.remove(key);
+  cleanSessions_();
+  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  const session = { user: u.name, pw: u.hash.slice(-12), exp: Date.now() + SESSION_DAYS * 864e5 };
+  PropertiesService.getScriptProperties().setProperty('s_' + token, JSON.stringify(session));
+  return { token: token, user: u.name, days: SESSION_DAYS };
+}
+
+function checkSession_(token) {
+  if (!token) throw loginError_('Please log in');
+  const raw = PropertiesService.getScriptProperties().getProperty('s_' + token);
+  if (!raw) throw loginError_('Please log in again');
+  const s = JSON.parse(raw);
+  const u = findUser_(s.user);
+  // Logged out if: expired, user removed from the Users tab, or password changed.
+  if (Date.now() > s.exp || !u || u.hash.slice(-12) !== s.pw) {
+    PropertiesService.getScriptProperties().deleteProperty('s_' + token);
+    throw loginError_('Please log in again');
+  }
+  return u.name;
+}
+
+function logout_(token) { if (token) PropertiesService.getScriptProperties().deleteProperty('s_' + token); }
+
+function cleanSessions_() {
   const p = PropertiesService.getScriptProperties();
-  let k = p.getProperty('API_KEY');
-  if (!k) { k = Utilities.getUuid().replace(/-/g, ''); p.setProperty('API_KEY', k); }
-  return k;
+  const all = p.getProperties();
+  Object.keys(all).forEach(k => {
+    if (k.indexOf('s_') !== 0) return;
+    try { if (Date.now() > JSON.parse(all[k]).exp) p.deleteProperty(k); } catch (e) { p.deleteProperty(k); }
+  });
 }
 
+// ---------------------------------------------------------------- sheet menu
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('Finance website').addItem('Show API key', 'showApiKey').addToUi();
+  SpreadsheetApp.getUi().createMenu('Finance website')
+    .addItem('Add or change a user', 'addUser')
+    .addItem('Log everyone out', 'logoutEveryone')
+    .addToUi();
 }
 
-function showApiKey() {
-  const k = apiKey_();
-  try { SpreadsheetApp.getUi().alert('API key for the finance website:\n\n' + k); } catch (e) { Logger.log(k); }
+function addUser() {
+  const ui = SpreadsheetApp.getUi();
+  const r1 = ui.prompt('Add or change a user', 'Username (e.g. abdelrahman):', ui.ButtonSet.OK_CANCEL);
+  if (r1.getSelectedButton() !== ui.Button.OK) return;
+  const name = r1.getResponseText().trim();
+  if (!name) return ui.alert('Username cannot be empty.');
+  const r2 = ui.prompt('Password for ' + name, 'At least 6 characters:', ui.ButtonSet.OK_CANCEL);
+  if (r2.getSelectedButton() !== ui.Button.OK) return;
+  const pw = r2.getResponseText();
+  if (pw.length < 6) return ui.alert('The password must have at least 6 characters.');
+  const sh = usersSheet_();
+  const u = findUser_(name);
+  if (u) sh.getRange(u.row, 2).setValue(makeHash_(pw));
+  else sh.appendRow([name, makeHash_(pw), new Date()]);
+  ui.alert((u ? 'Password changed for ' : 'User added: ') + name + '\n\nThey can now log in to the website.');
+}
+
+function logoutEveryone() {
+  const p = PropertiesService.getScriptProperties();
+  Object.keys(p.getProperties()).forEach(k => { if (k.indexOf('s_') === 0) p.deleteProperty(k); });
+  SpreadsheetApp.getUi().alert('Everyone is logged out of the website.');
 }
 
 // ---------------------------------------------------------------- helpers
@@ -183,9 +287,9 @@ function writeMain_(d) {
   return { row, rates: rates_(b) };
 }
 
-function addCashflow_(d) {
+function addCashflow_(d, user) {
   if (!String(d.description || '').trim()) throw new Error('Write a description');
-  const r = writeMain_(d);
+  const r = writeMain_(Object.assign({}, d, { note: 'Added from website by ' + user }));
   return { row: r.row };
 }
 

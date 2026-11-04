@@ -125,7 +125,17 @@
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #000; color: var(--ink); border: 1px solid var(--line); box-shadow: 0 0 20px var(--red-glow); padding: 10px 18px; border-radius: 999px; max-width: 90vw; z-index: 40; }
   #toast.error { background: var(--red); color: #000; font-weight: 600; }
   .note { border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13px; }
-  .connect { max-width: 460px; margin: 60px auto; }
+  .login { max-width: 420px; margin: 8vh auto 40px; padding: 34px 30px; position: relative; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(255,0,0,.25), 0 0 60px rgba(255,0,0,.18); }
+  .login::before { content: ""; position: absolute; inset: 0; background: radial-gradient(320px 160px at 50% 0%, rgba(255,0,0,.22), transparent 70%); pointer-events: none; }
+  .login > * { position: relative; }
+  .login h2 { text-align: center; font-size: 28px; margin: 6px 0 6px; }
+  .login > p.muted { text-align: center; margin: 0 0 10px; }
+  .login-mark { width: 64px; height: 64px; margin: 0 auto 6px; border: 1.5px solid var(--line); border-radius: 50%; display: grid; place-items: center; font-size: 28px; text-shadow: 0 0 14px var(--red-glow); }
+  .login-error { border: 1px solid var(--ink); background: rgba(255,0,0,.12); border-radius: 10px; padding: 9px 12px; margin: 14px 0 0; font-size: 13px; }
+  .pw { position: relative; }
+  .pw input { padding-right: 44px; }
+  .pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; cursor: pointer; font-size: 16px; padding: 4px 8px; filter: grayscale(1) brightness(1.6); }
 </style>
 </head>
 <body>
@@ -134,20 +144,32 @@
   <h1><a href="#home">AIESEC in Egypt · Finance</a></h1>
   <span id="modeBadge" class="badge hidden">Demo data — nothing is saved</span>
   <span class="spacer"></span>
-  <button id="disconnectBtn" class="hidden">Disconnect</button>
+  <span id="whoami" class="muted small hidden"></span>
+  <button id="logoutBtn" class="hidden">Log out</button>
 </header>
 
 <main>
-  <!-- CONNECT -->
-  <section id="page-connect" class="card connect hidden">
-    <h2>Connect to the finance sheet</h2>
-    <p class="muted">Paste the Web App URL and the API key from your "finance" Google Sheet (menu <b>Finance website → Show API key</b>). They're saved only in this browser.</p>
-    <label>Web App URL</label>
-    <input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec">
-    <label>API key</label>
-    <input id="apiKey" type="password">
-    <button class="btn full" id="connectBtn">Connect</button>
-    <button class="btn ghost full" id="demoBtn">Try with demo data</button>
+  <!-- LOGIN -->
+  <section id="page-connect" class="hidden">
+    <form class="card login" id="loginForm" autocomplete="on">
+      <div class="login-mark">⛁</div>
+      <h2>Welcome back</h2>
+      <p class="muted">Log in to the AIESEC in Egypt finance website.</p>
+      <label for="lgUser">Username</label>
+      <input id="lgUser" name="username" autocomplete="username" autocapitalize="none" spellcheck="false">
+      <label for="lgPass">Password</label>
+      <div class="pw">
+        <input id="lgPass" name="password" type="password" autocomplete="current-password">
+        <button type="button" class="pw-eye" id="lgEye" title="Show password">👁</button>
+      </div>
+      <div id="lgServerWrap" class="hidden">
+        <label for="lgServer">Server link (only needed once on this browser)</label>
+        <input id="lgServer" placeholder="https://script.google.com/.../exec" spellcheck="false">
+      </div>
+      <p id="lgError" class="login-error hidden"></p>
+      <button class="btn full" id="loginBtn" type="submit">Log in</button>
+      <p class="muted small" style="margin:14px 0 0;text-align:center">No account? Ask the finance team to add you.</p>
+    </form>
   </section>
 
   <!-- HOME: the three boxes -->
@@ -282,17 +304,26 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-let DEMO = false;
+// The Google Apps Script web app of the "finance" sheet. Every request except login needs a valid login.
+const SERVER_URL = '';
+const serverUrl = () => SERVER_URL || store.get('fin_url') || '';
+let DEMO = new URLSearchParams(location.search).has('demo');
 
 async function api(action, data) {
   if (DEMO) return demoApi(action, data || {});
-  const res = await fetch(store.get('fin_url'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ key: store.get('fin_key'), action, data: data || {} }),
-  });
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Something went wrong');
+  let json;
+  try {
+    const res = await fetch(serverUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ token: store.get('fin_token'), action, data: data || {} }),
+    });
+    json = await res.json();
+  } catch (e) { throw new Error('Cannot reach the finance sheet. Check your internet and try again.'); }
+  if (!json.ok) {
+    if (json.loginNeeded && action !== 'login') { showLogin(json.error); throw new Error(json.error); }
+    throw new Error(json.error || 'Something went wrong');
+  }
   return json.data;
 }
 
@@ -402,9 +433,11 @@ window.addEventListener('hashchange', route);
 
 async function start() {
   try { INIT = await api('init'); }
-  catch (err) { toast('Could not connect: ' + err.message, true); show('connect'); return; }
+  catch (err) { if (!$('page-connect').classList.contains('hidden')) return; showLogin(err.message); return; }
   $('modeBadge').classList.toggle('hidden', !DEMO);
-  $('disconnectBtn').classList.remove('hidden');
+  $('whoami').textContent = 'Hi, ' + (INIT.user || '');
+  $('whoami').classList.remove('hidden');
+  $('logoutBtn').classList.remove('hidden');
   $('cfDate').value = $('evDate').value = INIT.today || today();
   const m0 = (INIT.today || today()).slice(0, 7);
   const months = []; for (let i = 0; i < 12; i++) { const d = new Date(m0 + '-01T00:00:00'); d.setMonth(d.getMonth() - i); months.push(d.toISOString().slice(0, 7)); }
@@ -616,16 +649,55 @@ $('elSave').addEventListener('click', e => busy(e.target, async () => {
   EV = await api('getEvent', { name: EV.name }); renderEvent();
 }));
 
-// ===================================================================== connect
-$('connectBtn').addEventListener('click', () => {
-  const url = $('apiUrl').value.trim(), key = $('apiKey').value.trim();
-  if (!url.startsWith('https://script.google.com/')) return toast('The URL should start with https://script.google.com/', true);
-  if (!key) return toast('Paste your API key', true);
-  store.set('fin_url', url); store.set('fin_key', key);
-  start();
+// ===================================================================== login
+function showLogin(msg) {
+  INIT = null;
+  store.del('fin_token');
+  $('whoami').classList.add('hidden'); $('logoutBtn').classList.add('hidden');
+  $('lgServerWrap').classList.toggle('hidden', !!serverUrl() || DEMO);
+  $('lgError').textContent = msg && !/^Please log in$/.test(msg) ? msg : '';
+  $('lgError').classList.toggle('hidden', !$('lgError').textContent);
+  show('connect');
+  setTimeout(() => ($('lgUser').value ? $('lgPass') : $('lgUser')).focus(), 50);
+}
+
+$('lgEye').addEventListener('click', () => {
+  const p = $('lgPass'); p.type = p.type === 'password' ? 'text' : 'password';
+  $('lgEye').title = p.type === 'password' ? 'Show password' : 'Hide password';
 });
-$('demoBtn').addEventListener('click', () => { DEMO = true; start(); });
-$('disconnectBtn').addEventListener('click', () => { store.del('fin_url'); store.del('fin_key'); location.hash = ''; location.reload(); });
+
+$('loginForm').addEventListener('submit', e => {
+  e.preventDefault();
+  busy($('loginBtn'), async () => {
+    $('lgError').classList.add('hidden');
+    const username = $('lgUser').value.trim(), password = $('lgPass').value;
+    if (!$('lgServerWrap').classList.contains('hidden')) {
+      const url = $('lgServer').value.trim();
+      if (!url.startsWith('https://script.google.com/')) throw new Error('The server link should start with https://script.google.com/');
+      store.set('fin_url', url);
+    }
+    if (!username || !password) throw new Error('Write your username and password');
+    try {
+      const r = await api('login', { username, password });
+      store.set('fin_token', r.token); store.set('fin_user', r.user);
+    } catch (err) {
+      $('lgError').textContent = err.message; $('lgError').classList.remove('hidden');
+      $('lgPass').value = ''; $('lgPass').focus();
+      return;
+    }
+    $('lgPass').value = '';
+    if (!location.hash || location.hash === '#connect') location.hash = 'home';
+    start();
+  });
+});
+
+$('logoutBtn').addEventListener('click', async () => {
+  const token = store.get('fin_token');
+  if (!DEMO && token) fetch(serverUrl(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'logout', token }) }).catch(() => {});
+  location.hash = '';
+  showLogin();
+  toast('You are logged out');
+});
 
 // ===================================================================== demo data (in memory only)
 const demo = (() => {
@@ -650,7 +722,8 @@ async function demoApi(action, d) {
     if (!(x.amount > 0)) throw new Error('Amount must be more than 0');
     D.main.push(Object.assign({}, x)); return D.main.length + 285;
   };
-  if (action === 'init') return { incomeCategories: D.income, expenseCategories: D.expense, today: today() };
+  if (action === 'login') { if (d.password !== 'demo1234') throw new Error('Wrong username or password'); return { token: 'demo', user: d.username }; }
+  if (action === 'init') return { incomeCategories: D.income, expenseCategories: D.expense, today: today(), user: store.get('fin_user') };
   if (action === 'cashflow') {
     const m = d.month || today().slice(0, 7);
     const bal = Object.assign({}, D.opening);
@@ -681,8 +754,10 @@ async function demoApi(action, d) {
 }
 
 // ===================================================================== start
-if (store.get('fin_url') && store.get('fin_key')) start();
-else show('connect');
+store.del('fin_key'); // left over from the old "API key" version
+if (store.get('fin_user')) $('lgUser').value = store.get('fin_user');
+if (store.get('fin_token') && (serverUrl() || DEMO)) start();
+else showLogin();
 </script>
 </body>
 </html>
