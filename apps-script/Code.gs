@@ -321,26 +321,23 @@ function logoutEveryone() {
 }
 
 // ---------------------------------------------------------------- Petty cash dashboard (READ ONLY)
-// The "All LCs" petty cash sheet. The website only reads it: nothing in this section writes, formats or deletes.
+// Reads ONLY the "All LCs" tab of the "ioi" sheet: LC name, petty cash and budgeted expenses.
+// No other tab is opened, and nothing in this section writes, formats or deletes.
 const PETTY_BOOK_ID = '1tQaGEJyxngTzEPPGr1BhhWReIswqdRWBBtAwxa4LUL4';
 function pettyCash_() {
-  const book = SpreadsheetApp.openById(PETTY_BOOK_ID);
-  const all = book.getSheetByName('All LCs');
-  if (!all) throw new Error('The "All LCs" tab was not found in the petty cash sheet');
+  const all = SpreadsheetApp.openById(PETTY_BOOK_ID).getSheetByName('All LCs');
+  if (!all) throw new Error('The "All LCs" tab was not found in the ioi sheet');
   const n = v => (typeof v === 'number' ? v : Number(String(v).replace(/[^0-9.\-]/g, '')) || 0);
   const lcs = [];
-  all.getRange(4, 1, 40, 9).getValues().some(r => {
+  all.getRange(4, 1, 40, 6).getValues().some(r => {   // columns A..F: LC, EGP, USD, EUR, Total (EGP), Budgeted
     const name = String(r[0]).trim();
     if (!name) return false;
-    if (/^total$/i.test(name)) return true; // stop at the TOTAL row
-    const sh = book.getSheetByName(name);
-    const months = sh ? sh.getRange(10, 1, 6, 3).getValues().filter(m => String(m[0]).trim())
-      .map(m => ({ month: String(m[0]).trim(), budget: n(m[1]), actual: n(m[2]) })) : [];
-    lcs.push({ name: name, EGP: n(r[1]), USD: n(r[2]), EUR: n(r[3]), totalEGP: n(r[4]), budget: n(r[5]), actual: n(r[6]), months: months });
+    if (/^total$/i.test(name)) return true;          // stop at the TOTAL row
+    lcs.push({ name: name, EGP: n(r[1]), USD: n(r[2]), EUR: n(r[3]), totalEGP: n(r[4]), budget: n(r[5]) });
     return false;
   });
   return { lcs: lcs, updated: Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd HH:mm') };
 }
 
-// Run once from the editor after pasting this version: it asks for permission to read the petty cash sheet.
+// Run once from the editor after pasting this version: it asks for permission to read the ioi sheet.
 function testPettyAccess() { const r = pettyCash_(); Logger.log('OK: ' + r.lcs.length + ' LCs read'); }

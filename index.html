@@ -376,7 +376,7 @@
       <a class="box" href="#petty">
         <img class="sticker" src="assets/azooza.png" alt=""><img class="ico" src="assets/icons/wallet.png" alt="">
         <h2>Petty cash</h2>
-        <p>AIESEC in Egypt petty cash dashboard: every LC's petty cash, budget and spending in one place.</p>
+        <p>AIESEC in Egypt petty cash dashboard: every LC's petty cash and budgeted expenses.</p>
       </a>
     </div>
     <div class="parade" id="parade"></div>
@@ -532,10 +532,9 @@
     <div class="page-head"><img class="sticker float" src="assets/azooza.png" alt=""><h2>Petty cash · AIESEC in Egypt</h2><img class="ico" src="assets/icons/wallet.png" alt=""></div>
     <div class="tiles" id="pcTiles"></div>
     <div class="pc-grid">
-      <div class="card"><h3>Petty cash by LC</h3><p class="muted small" style="margin:-6px 0 12px">Total in EGP (EGP + USD + EUR). Red = negative.</p><div class="hbars" id="pcBars"></div></div>
-      <div class="card"><h3>Budget used by LC</h3><p class="muted small" style="margin:-6px 0 12px">Actual expenses ÷ budgeted expenses. Red = over budget.</p><div class="use" id="pcUse"></div></div>
+      <div class="card"><h3>Petty cash by LC</h3><p class="muted small" style="margin:-6px 0 12px">Petty cash total in EGP. Red = negative.</p><div class="hbars" id="pcBars"></div></div>
+      <div class="card"><h3>Budgeted expenses by LC</h3><p class="muted small" style="margin:-6px 0 12px">Total budgeted expenses in EGP.</p><div class="hbars" id="pcBud"></div></div>
     </div>
-    <div class="card" id="pcDetail"></div>
     <div class="card"><h3>All LCs</h3><div class="table-wrap"><table id="pcTable"></table></div>
       <p class="muted small" id="pcNote" style="margin:10px 0 0"></p></div>
   </section>
@@ -1383,7 +1382,7 @@ $('rsSave').addEventListener('click', e => busy(e.target, async () => {
 
 
 // ===================================================================== petty cash dashboard (read only)
-let PC = null, PC_SEL = '';
+let PC = null;
 async function loadPetty() {
   $('pcBars').innerHTML = '<span class="muted">Loading petty cash…</span>';
   try { PC = await api('pettyCash'); renderPetty(); }
@@ -1393,62 +1392,34 @@ async function loadPetty() {
   }
 }
 const pct = (a, b) => b ? a / b : 0;
+function barsHtml(list, key, tip) {
+  const sorted = list.slice().sort((a, b) => b[key] - a[key]);
+  const max = Math.max(0, ...sorted.map(l => l[key])), min = Math.min(0, ...sorted.map(l => l[key])), span = (max - min) || 1;
+  const z = -min / span * 100;
+  return sorted.map(l => {
+    const v = l[key], w = Math.abs(v) / span * 100, minus = v < 0;
+    const left = minus ? z - w : z, vPos = minus ? `right:${100 - left + 1}%` : `left:calc(${z + w}% + 6px)`;
+    return `<span class="nm">${esc(l.name)}</span><div class="track" style="margin:0 58px 0 ${min < 0 ? 58 : 0}px" data-tip="${esc(tip(l))}">
+      ${min < 0 ? `<i class="zero" style="left:${z}%"></i>` : ''}<span class="fill${minus ? ' minus' : ''}" style="left:${left}%;width:${w}%"></span>
+      <span class="val" style="${vPos}">${fmt(v)}</span></div>`;
+  }).join('');
+}
 function renderPetty() {
   const L = PC.lcs, sum = k => L.reduce((t, l) => t + (Number(l[k]) || 0), 0);
-  const tot = { EGP: sum('EGP'), USD: sum('USD'), EUR: sum('EUR'), totalEGP: sum('totalEGP'), budget: sum('budget'), actual: sum('actual') };
-  const over = L.filter(l => l.budget && l.actual > l.budget).length, neg = L.filter(l => l.totalEGP < 0).length;
+  const tot = { EGP: sum('EGP'), USD: sum('USD'), EUR: sum('EUR'), totalEGP: sum('totalEGP'), budget: sum('budget') };
+  const neg = L.filter(l => l.totalEGP < 0).length;
   $('pcTiles').innerHTML =
-    tile('Total petty cash · EGP', fmt(tot.totalEGP), `${L.length} LCs, all currencies in EGP`) +
-    tile('Cash in EGP', fmt(tot.EGP), `USD ${fmt(tot.USD, 2)} · EUR ${fmt(tot.EUR, 2)}`) +
-    tile('Budgeted expenses', fmt(tot.budget), 'all LCs, this term') +
-    tile('Actual expenses', fmt(tot.actual), `${(pct(tot.actual, tot.budget) * 100).toFixed(1)}% of budget used`) +
-    tile('Watch list', `${over + neg}`, `${over} over budget · ${neg} negative cash`);
-  // Bars: petty cash per LC, sorted, with a zero line when some are negative
-  const sorted = L.slice().sort((a, b) => b.totalEGP - a.totalEGP);
-  const max = Math.max(0, ...sorted.map(l => l.totalEGP)), min = Math.min(0, ...sorted.map(l => l.totalEGP)), span = (max - min) || 1;
-  const z = -min / span * 100;
-  $('pcBars').innerHTML = sorted.map(l => {
-    const w = Math.abs(l.totalEGP) / span * 100, minus = l.totalEGP < 0;
-    const left = minus ? z - w : z, vPos = minus ? `right:${100 - left + 1}%` : `left:calc(${z + w}% + 6px)`;
-    return `<span class="nm" data-lc="${esc(l.name)}">${esc(l.name)}</span><div class="track" style="margin:0 58px 0 ${min < 0 ? 58 : 0}px" data-tip="${esc(l.name)}|Petty cash ${fmt(l.totalEGP)} EGP|EGP ${fmt(l.EGP)} · USD ${fmt(l.USD, 2)} · EUR ${fmt(l.EUR, 2)}">
-      ${min < 0 ? `<i class="zero" style="left:${z}%"></i>` : ''}<span class="fill${minus ? ' minus' : ''}" style="left:${left}%;width:${w}%"></span>
-      <span class="val" style="${vPos}">${fmt(l.totalEGP)}</span></div>`;
-  }).join('');
-  // Budget use per LC (cap the bar at 100%, show the real % as text)
-  const byUse = L.slice().sort((a, b) => pct(b.actual, b.budget) - pct(a.actual, a.budget));
-  $('pcUse').innerHTML = byUse.map(l => {
-    const p = pct(l.actual, l.budget), isOver = l.budget && l.actual > l.budget;
-    return `<span class="nm" data-lc="${esc(l.name)}" style="cursor:pointer">${esc(l.name)}</span>
-      <div class="meter" data-tip="${esc(l.name)}|Budget ${fmt(l.budget)} EGP|Actual ${fmt(l.actual)} EGP|${l.budget ? (isOver ? 'Over by ' + fmt(l.actual - l.budget) : 'Left ' + fmt(l.budget - l.actual)) + ' EGP' : 'No budget yet'}"><span class="${isOver ? 'over' : ''}" style="width:${Math.min(100, p * 100)}%"></span></div>
-      <span class="pct ${isOver ? 'neg' : 'muted'}">${l.budget ? (p * 100).toFixed(0) + '%' + (isOver ? ' ⚠' : '') : '–'}</span>`;
-  }).join('');
-  // Table
-  $('pcTable').innerHTML = '<tr><th>LC</th><th class="num">EGP</th><th class="num">USD</th><th class="num">EUR</th><th class="num">Total (EGP)</th><th class="num">Budgeted</th><th class="num">Actual</th><th class="num">Variance</th><th class="num">% used</th></tr>' +
-    L.map(l => `<tr class="pc-row${PC_SEL === l.name ? ' sel' : ''}" data-lc="${esc(l.name)}"><td><b>${esc(l.name)}</b></td><td class="num">${money(l.EGP)}</td><td class="num">${money(l.USD, 2)}</td><td class="num">${money(l.EUR, 2)}</td>
-      <td class="num"><b>${money(l.totalEGP)}</b></td><td class="num">${fmt(l.budget)}</td><td class="num">${fmt(l.actual)}</td><td class="num">${money(l.budget - l.actual)}</td>
-      <td class="num ${l.budget && l.actual > l.budget ? 'neg' : ''}">${l.budget ? (pct(l.actual, l.budget) * 100).toFixed(1) + '%' : '–'}</td></tr>`).join('') +
-    `<tr class="total"><td>Total</td><td class="num">${fmt(tot.EGP)}</td><td class="num">${fmt(tot.USD, 2)}</td><td class="num">${fmt(tot.EUR, 2)}</td><td class="num">${fmt(tot.totalEGP)}</td><td class="num">${fmt(tot.budget)}</td><td class="num">${fmt(tot.actual)}</td><td class="num">${fmt(tot.budget - tot.actual)}</td><td class="num">${(pct(tot.actual, tot.budget) * 100).toFixed(1)}%</td></tr>`;
-  $('pcNote').textContent = 'Read from the petty cash sheet ("All LCs" tab) on ' + PC.updated + '. The website only reads this sheet; it never changes it.';
-  if (!PC_SEL || !L.some(l => l.name === PC_SEL)) PC_SEL = sorted[0] ? sorted[0].name : '';
-  renderPettyLc();
+    tile('Total petty cash · EGP', fmt(tot.totalEGP), `${L.length} LCs` + (neg ? ` · ${neg} negative` : '')) +
+    tile('Petty cash EGP', fmt(tot.EGP)) + tile('Petty cash USD', fmt(tot.USD, 2)) + tile('Petty cash EUR', fmt(tot.EUR, 2)) +
+    tile('Budgeted expenses · EGP', fmt(tot.budget), 'all LCs');
+  $('pcBars').innerHTML = barsHtml(L, 'totalEGP', l => `${l.name}|Petty cash total ${fmt(l.totalEGP)} EGP|EGP ${fmt(l.EGP)} · USD ${fmt(l.USD, 2)} · EUR ${fmt(l.EUR, 2)}`);
+  $('pcBud').innerHTML = barsHtml(L, 'budget', l => `${l.name}|Budgeted expenses ${fmt(l.budget)} EGP`);
+  $('pcTable').innerHTML = '<tr><th>LC</th><th class="num">Petty cash EGP</th><th class="num">Petty cash USD</th><th class="num">Petty cash EUR</th><th class="num">Petty cash total (EGP)</th><th class="num">Budgeted expenses</th></tr>' +
+    L.map(l => `<tr><td><b>${esc(l.name)}</b></td><td class="num">${money(l.EGP)}</td><td class="num">${money(l.USD, 2)}</td><td class="num">${money(l.EUR, 2)}</td>
+      <td class="num"><b>${money(l.totalEGP)}</b></td><td class="num">${fmt(l.budget)}</td></tr>`).join('') +
+    `<tr class="total"><td>Total</td><td class="num">${fmt(tot.EGP)}</td><td class="num">${fmt(tot.USD, 2)}</td><td class="num">${fmt(tot.EUR, 2)}</td><td class="num">${fmt(tot.totalEGP)}</td><td class="num">${fmt(tot.budget)}</td></tr>`;
+  $('pcNote').textContent = 'Read from the "All LCs" tab of the ioi sheet on ' + PC.updated + '. The website only reads this tab; it never changes it.';
 }
-function renderPettyLc() {
-  const l = PC.lcs.find(x => x.name === PC_SEL);
-  document.querySelectorAll('#pcTable tr.pc-row').forEach(tr => tr.classList.toggle('sel', tr.dataset.lc === PC_SEL));
-  if (!l) { $('pcDetail').innerHTML = ''; return; }
-  const ms = l.months || [], top = Math.max(1, ...ms.map(m => Math.max(m.budget, m.actual)));
-  $('pcDetail').innerHTML = `<h3>${esc(l.name)} · monthly expenses</h3>
-    <p class="muted small" style="margin:-6px 0 10px">Click any LC (bars or table) to see its months. Petty cash: <b style="color:var(--gold)">${fmt(l.totalEGP)} EGP</b> · budget used ${l.budget ? (pct(l.actual, l.budget) * 100).toFixed(1) + '%' : '–'}</p>
-    <div class="legend"><span><i style="border:2px solid var(--line)"></i>Budgeted</span><span><i style="background:var(--gold)"></i>Actual</span><span><i style="background:var(--bad)"></i>Actual over budget</span></div>
-    ${ms.length ? `<div class="months" style="grid-template-columns:repeat(${ms.length},1fr)">${ms.map(m => `<div class="m" data-tip="${esc(m.month)}|Budgeted ${fmt(m.budget)} EGP|Actual ${fmt(m.actual)} EGP|${m.budget ? (pct(m.actual, m.budget) * 100).toFixed(0) + '% used' : 'No budget'}">
-      <span class="b bud" style="height:${m.budget / top * 100}%"></span><span class="b act${m.actual > m.budget ? ' over' : ''}" style="height:${m.actual / top * 100}%"></span></div>`).join('')}</div>
-      <div class="mlabels" style="grid-template-columns:repeat(${ms.length},1fr)">${ms.map(m => `<span>${esc(m.month.slice(0, 3))}</span>`).join('')}</div>` : '<p class="muted">No monthly data in this LC\'s tab.</p>'}`;
-}
-$('page-petty').addEventListener('click', e => {
-  const t = e.target.closest('[data-lc]'); if (!t || !PC) return;
-  PC_SEL = t.dataset.lc; renderPettyLc();
-  if (!t.closest('#pcTable')) $('pcDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-});
 // Hover tooltip for the dashboard (bars, meters, months)
 (() => {
   const tip = document.createElement('div'); tip.id = 'pcTip'; tip.className = 'hidden'; document.body.appendChild(tip);
@@ -1575,12 +1546,10 @@ function demoLcBal(l) {
 // Made-up petty cash numbers for the demo (not the real sheet)
 function demoPetty() {
   const names = ['AAST Cairo', 'MIU', 'MUST', 'Ain Shams', 'AAST Alexandria', '6th October', 'Suez', 'Tanta', 'Zagazig', 'New Capital', 'GUC', 'Cairo University', 'Mansoura', 'Beni Suef', 'Helwan', 'AUC', 'Menofia', 'Galala', 'Alexandria'];
-  const MONTHS = ['August', 'September', 'October', 'November', 'December', 'January'];
   const lcs = names.map((name, i) => {
     const r = k => ((Math.sin(i * 9.1 + k) + 1) / 2);
-    const months = MONTHS.map((month, j) => { const budget = Math.round(r(j) * 60) * 1000; return { month, budget, actual: j < 4 ? Math.round(budget * (0.3 + r(j + 7) * 1.1)) : 0 }; });
     const EGP = Math.round((r(3) * 90000 - (i % 6 === 4 ? 100000 : 5000)) / 10) * 10, USD = i % 4 === 0 ? Math.round(r(5) * 300) : 0, EUR = i % 7 === 0 ? 50 : 0;
-    return { name, EGP, USD, EUR, totalEGP: EGP + USD * 48 + EUR * 56, budget: months.reduce((t, m) => t + m.budget, 0), actual: months.reduce((t, m) => t + m.actual, 0), months };
+    return { name, EGP, USD, EUR, totalEGP: EGP + USD * 48 + EUR * 56, budget: Math.round(r(8) * 500) * 1000 };
   });
   return { lcs, updated: today() + ' (demo)' };
 }
