@@ -11,7 +11,7 @@
 <style>
   /* ---------- Baksana Forever: dollar green + gold ---------- */
   :root {
-    --bg1: #06331c; --bg2: #0e5230; --card: rgba(4, 34, 19, .78); --panel: rgba(255,255,255,.04);
+    --bg1: #021a0d; --bg2: #06301a; --card: rgba(2, 20, 10, .82); --panel: rgba(255,255,255,.04);
     --line: #8fc46f; --line-soft: rgba(143,196,111,.25);
     --ink: #eef6e4; --muted: #a8c79a; --gold: #f8d33a; --gold-deep: #d9a915; --glow: rgba(248,211,58,.35);
     --good: #5ee08a; --bad: #ff7a6b; --warn: #ffb347;
@@ -37,7 +37,7 @@
 
   /* Header: name in the middle */
   header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 10px 20px;
-    background: rgba(3, 30, 16, .82); backdrop-filter: blur(6px); border-bottom: 2px solid var(--gold); position: sticky; top: 0; z-index: 30; }
+    background: rgba(1, 16, 8, .88); backdrop-filter: blur(6px); border-bottom: 2px solid var(--gold); position: sticky; top: 0; z-index: 30; }
   header .h-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
   header .h-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
   .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
@@ -160,7 +160,7 @@
   .combo { position: relative; }
   .combo input { padding-right: 30px; }
   .combo::after { content: "▾"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--gold); pointer-events: none; font-size: 12px; }
-  .combo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: #052a17; border: 1.5px solid var(--line); border-radius: 12px;
+  .combo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: #03180c; border: 1.5px solid var(--line); border-radius: 12px;
     box-shadow: 0 12px 30px rgba(0,0,0,.6); max-height: 260px; overflow-y: auto; z-index: 20; }
   .combo-list div { padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--ink); }
   .combo-list div.hl { background: rgba(248,211,58,.16); }
@@ -174,7 +174,7 @@
   .event-list .item:hover { background: rgba(248,211,58,.07); }
   .event-list .item b { color: var(--gold); }
 
-  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #052a17; color: var(--ink); border: 1.5px solid var(--gold); box-shadow: 0 0 20px var(--glow); padding: 10px 18px; border-radius: 999px; max-width: 90vw; z-index: 40; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #03180c; color: var(--ink); border: 1.5px solid var(--gold); box-shadow: 0 0 20px var(--glow); padding: 10px 18px; border-radius: 999px; max-width: 90vw; z-index: 40; }
   #toast.error { background: var(--bad); color: #2a0a06; border-color: var(--bad); font-weight: 600; }
   .note { border: 1.5px dashed var(--line); border-radius: 12px; padding: 12px 14px; font-size: 13px; }
   .soon-art { display: flex; gap: 16px; align-items: center; }
@@ -192,7 +192,7 @@
   .login-art img:nth-child(1) { --rot: -8deg; animation-delay: -.8s; } .login-art img:nth-child(3) { --rot: 8deg; animation-delay: -1.6s; }
   .login-error { border: 1px solid var(--bad); color: var(--bad); background: rgba(255,122,107,.1); border-radius: 12px; padding: 9px 12px; margin: 14px 0 0; font-size: 13px; }
   input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
-    -webkit-text-fill-color: var(--ink); -webkit-box-shadow: 0 0 0 1000px #08341f inset; caret-color: var(--ink); transition: background-color 9999s; }
+    -webkit-text-fill-color: var(--ink); -webkit-box-shadow: 0 0 0 1000px #04200f inset; caret-color: var(--ink); transition: background-color 9999s; }
   .pw { position: relative; }
   .pw input { padding-right: 44px; }
   .pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; cursor: pointer; font-size: 16px; padding: 4px 8px; filter: grayscale(1) brightness(1.6); }
@@ -253,14 +253,14 @@
   .tribute .name { font-size: 50px; line-height: 1; letter-spacing: 2px; margin: 8px 0 6px; font-weight: 500; color: #fff; }
   .tribute .role { font-family: var(--body); letter-spacing: 2px; font-size: 11px; text-transform: uppercase; color: #bdb8ad; }
   .tribute .rule { width: 120px; height: 1px; margin: 16px auto; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
-  .tribute p { font-size: 19px; line-height: 1.5; margin: 0; font-style: italic; color: #e2ddd2; }
+  .tribute p { font-variant-numeric: lining-nums; font-size: 19px; line-height: 1.5; margin: 0; font-style: italic; color: #e2ddd2; }
   .tribute .never { font-family: var(--body); letter-spacing: 4px; font-size: 12px; text-transform: uppercase; color: var(--gold); margin-top: 18px; }
   @media (max-width: 760px) { .tribute { grid-template-columns: 1fr; padding: 30px 20px 26px; gap: 40px; } .tribute .frame { width: 220px; height: 270px; } .tribute .name { font-size: 38px; } .tribute p { font-size: 17px; } }
 
   html, body { overflow-x: clip; }
   @media (max-width: 760px) { #whoami { display: none; } }
   /* Footer */
-  footer.site { position: relative; z-index: 1; text-align: center; padding: 18px 16px 30px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line-soft); background: rgba(3,30,16,.55); }
+  footer.site { position: relative; z-index: 1; text-align: center; padding: 18px 16px 30px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line-soft); background: rgba(1,16,8,.6); }
   footer.site a { color: var(--gold); text-decoration: none; }
   footer.site a:hover { text-shadow: 0 0 10px var(--glow); }
 </style>
@@ -351,8 +351,9 @@
         <div class="kicker">In loving memory of</div>
         <div class="name">Youssef Khaled</div>
         <div class="role">MCVP F&amp;L · 24.25 term · AIESEC in Egypt</div>
+        <div class="role" style="margin-top:6px;color:var(--gold)">🕯 10 June</div>
         <div class="rule"></div>
-        <p>Today, we lost more than a teammate. We lost a brother, a friend, a light in our lives.
+        <p>On the 10th of June, we lost more than a teammate. We lost a brother, a friend, a light in our lives.
           Youssef was the kind of person who made everything better with a smile, with his support, with his heart.
           He stood by each of us, in every moment, always giving more than he had.
           We'll carry your love and legacy with us, always.</p>
