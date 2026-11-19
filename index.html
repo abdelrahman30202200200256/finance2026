@@ -256,8 +256,7 @@
       <a class="box" href="#reserve">
         <img class="sticker" src="assets/estakka.png" alt="">
         <h2>Cash added to reserve</h2>
-        <p>Record cash that LCs add to their reserve.</p>
-        <span class="soon">Coming soon</span>
+        <p>Add a credit or debit to an LC's reserve in the LCs Balances sheet, and see every LC's balance.</p>
       </a>
     </div>
     <div class="parade" id="parade"></div>
@@ -362,10 +361,32 @@
   <!-- RESERVE -->
   <section id="page-reserve" class="hidden">
     <a class="back" href="#home">← Home</a>
-    <div class="card" style="max-width:640px">
-      <div class="soon-art"><img class="sticker float" src="assets/estakka.png" alt="">
-        <div><h2>Cash added to reserve</h2>
-        <p class="note">This part is coming next. Tell me how it should work and I'll build it.</p></div></div>
+    <div class="page-head"><img class="sticker float" src="assets/estakka.png" alt=""><h2>Cash added to reserve</h2></div>
+    <div class="grid2">
+      <div class="card">
+        <h3>New entry in an LC's reserve</h3>
+        <label>LC</label><select id="rsLc"></select>
+        <label>Date</label><input type="date" id="rsDate">
+        <label>Type</label>
+        <div class="seg type" id="rsSide"><button data-v="credit" class="on">Credit (money in)</button><button data-v="debit">Debit (money out)</button></div>
+        <label>Currency</label>
+        <div class="seg" id="rsCurrency"><button data-v="EGP" class="on">EGP</button><button data-v="USD">USD</button><button data-v="EUR">EUR</button></div>
+        <label>Amount</label><input type="number" id="rsAmount" min="0" step="0.01" placeholder="0.00">
+        <label>Description</label><input id="rsDesc" value="Cash added to Reserve">
+        <label>Way of payment (optional)</label><input id="rsPay" placeholder="e.g. Instapay, cash, bank transfer">
+        <button class="btn full" id="rsSave">Submit</button>
+        <p class="muted small">Written into the LC's own tab in <b>AIESEC in Egypt | LCs Balances</b>, in the next empty row of the current period (rows 5–29). Nothing else in that sheet is changed.</p>
+      </div>
+      <div>
+        <div class="card">
+          <h3>LC reserve balances</h3>
+          <div class="table-wrap"><table id="rsTable"></table></div>
+        </div>
+        <div class="card">
+          <h3 id="rsEntriesTitle">Entries</h3>
+          <div class="table-wrap"><table id="rsEntries"></table></div>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -429,6 +450,10 @@ async function write(ops) { return rpc('write', { ops }); }
 async function refreshMeta() { META = await rpc('meta'); return META; }
 
 const LOGIC = {
+  // LCs Balances (separate sensitive sheet): the connector only allows reading and adding one entry
+  async lcBalances() { return rpc('lcBalances'); },
+  async lcAdd(d) { return rpc('lcAdd', d); },
+
   async init() {
     await refreshMeta();
     if (!META.version) throw new Error('The connector in the finance sheet is an old version. Paste the latest Code.gs and deploy a new version.');
@@ -784,7 +809,7 @@ function makeCombo(sel) {
   sync();
 }
 function setSelect(sel, v) { sel.value = v; if (sel._sync) sel._sync(); }
-['cfCategory', 'cfMonth', 'evItem'].forEach(id => makeCombo($(id)));
+['cfCategory', 'cfMonth', 'evItem', 'rsLc'].forEach(id => makeCombo($(id)));
 
 // ===================================================================== routing
 let INIT = null;
@@ -800,6 +825,7 @@ function route() {
   if (page === 'cashflow') loadCashflow();
   if (page === 'events') loadEvents();
   if (page === 'new-event') wzStart();
+  if (page === 'reserve') loadReserve();
 }
 window.addEventListener('hashchange', route);
 
@@ -811,7 +837,7 @@ async function start() {
   $('heroHi').textContent = 'Welcome back' + (INIT.user ? ', ' + INIT.user : '');
   $('whoami').classList.remove('hidden');
   $('logoutBtn').classList.remove('hidden');
-  $('cfDate').value = $('evDate').value = INIT.today || today();
+  $('cfDate').value = $('evDate').value = $('rsDate').value = INIT.today || today();
   const m0 = (INIT.today || today()).slice(0, 7);
   const months = []; for (let i = 0; i < 12; i++) { const d = new Date(m0 + '-01T00:00:00'); d.setMonth(d.getMonth() - i); months.push(d.toISOString().slice(0, 7)); }
   $('cfMonth').innerHTML = months.map(m => `<option value="${m}">${monthName(m)}</option>`).join('');
@@ -1096,6 +1122,75 @@ $('elSave').addEventListener('click', e => busy(e.target, async () => {
   EV = await api('getEvent', { name: EV.name }); renderEvent();
 }));
 
+// ===================================================================== cash added to reserve (LCs Balances sheet)
+const LC_LABELS = { 'AAST-Cairo': 'AAST-Cairo', ASU: 'Ain Shams (ASU)', AUC: 'AUC', CU: 'Cairo University (CU)', GUC: 'GUC', Helwan: 'Helwan',
+  Mansoura: 'Mansoura', Menofia: 'Menofia', MUST: 'MUST', MIU: 'MIU', Suez: 'Suez', Tanta: 'Tanta', Zagazig: 'Zagazig',
+  '6th of october uni': '6th of October Uni', 'AAST-Alex': 'AAST-Alex', Alexandria: 'Alexandria', 'New Capital': 'New Capital', Galala: 'Galala' };
+const lcLabel = n => LC_LABELS[n] || n;
+let RS = null;
+
+async function loadReserve() {
+  $('rsTable').innerHTML = '<tr><td class="muted">Loading LC balances…</td></tr>';
+  try {
+    RS = await api('lcBalances');
+    if (!$('rsLc').options.length) {
+      $('rsLc').innerHTML = '<option value="">Choose LC</option>' + RS.map(l => `<option value="${esc(l.name)}">${esc(lcLabel(l.name))}</option>`).join('');
+    }
+    renderReserve();
+  } catch (err) { $('rsTable').innerHTML = ''; toast(err.message, true); }
+}
+
+function renderReserve() {
+  const tot = { EGP: 0, USD: 0, EUR: 0 };
+  $('rsTable').innerHTML = '<tr><th>LC</th><th class="num">EGP</th><th class="num">USD</th><th class="num">EUR</th><th class="num">Rows left</th></tr>' +
+    RS.map(l => {
+      if (l.missing) return `<tr><td>${esc(lcLabel(l.name))}</td><td colspan="4" class="muted">tab not found</td></tr>`;
+      ['EGP', 'USD', 'EUR'].forEach(c => tot[c] += Number(l.balance[c]) || 0);
+      return `<tr class="rs-row${$('rsLc').value === l.name ? ' sel' : ''}" data-lc="${esc(l.name)}" style="cursor:pointer"><td><b>${esc(lcLabel(l.name))}</b></td>
+        <td class="num">${money(Number(l.balance.EGP) || 0)}</td><td class="num">${money(Number(l.balance.USD) || 0, 2)}</td><td class="num">${money(Number(l.balance.EUR) || 0, 2)}</td>
+        <td class="num ${l.free <= 3 ? 'neg' : 'muted'}">${l.free}</td></tr>`;
+    }).join('') +
+    `<tr class="total"><td>Total</td><td class="num">${money(tot.EGP)}</td><td class="num">${money(tot.USD, 2)}</td><td class="num">${money(tot.EUR, 2)}</td><td></td></tr>`;
+  renderLcEntries();
+}
+
+function renderLcEntries() {
+  const l = RS && RS.find(x => x.name === $('rsLc').value);
+  if (!l) { $('rsEntriesTitle').textContent = 'Entries'; $('rsEntries').innerHTML = '<tr><td class="muted">Choose an LC to see its entries (click a row above or pick it in the form).</td></tr>'; return; }
+  $('rsEntriesTitle').textContent = `${lcLabel(l.name)} · ${l.period || 'current period'}`;
+  const amt = o => ['EGP', 'USD', 'EUR'].filter(c => Number(o[c])).map(c => `${fmt(Number(o[c]), 2)} ${c}`).join('<br>');
+  $('rsEntries').innerHTML = '<tr><th>#</th><th>Date</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th></tr>' +
+    (l.entries.length ? l.entries.slice().reverse().map(e => `<tr><td class="small muted">${esc(e.no)}</td><td class="small">${esc(e.date && e.date.d ? e.date.d : e.date || '')}</td>
+      <td>${esc(e.description)}${e.payment ? `<div class="small muted">${esc(e.payment)}</div>` : ''}</td>
+      <td class="num neg">${amt(e.debit)}</td><td class="num pos">${amt(e.credit)}</td></tr>`).join('')
+      : '<tr><td colspan="5" class="muted">No entries yet in this period</td></tr>');
+}
+
+$('rsLc').addEventListener('change', () => { if (RS) renderReserve(); });
+$('rsTable').addEventListener('click', e => { const r = e.target.closest('tr[data-lc]'); if (r) { setSelect($('rsLc'), r.dataset.lc); renderReserve(); } });
+$('rsSide').addEventListener('change', () => {
+  const d = $('rsDesc');
+  if (segValue('rsSide') === 'debit' && d.value === 'Cash added to Reserve') d.value = '';
+  if (segValue('rsSide') === 'credit' && !d.value.trim()) d.value = 'Cash added to Reserve';
+});
+
+$('rsSave').addEventListener('click', e => busy(e.target, async () => {
+  const data = { lc: $('rsLc').value, date: $('rsDate').value, side: segValue('rsSide'), currency: segValue('rsCurrency'),
+    amount: Number($('rsAmount').value), description: $('rsDesc').value.trim(), payment: $('rsPay').value.trim() };
+  if (!data.lc) throw new Error('Choose an LC');
+  if (!data.date) throw new Error('Choose a date');
+  if (!(data.amount > 0)) throw new Error('Write an amount more than 0');
+  if (!data.description) throw new Error('Write a description');
+  const sideTxt = data.side === 'credit' ? 'CREDIT (money in)' : 'DEBIT (money out)';
+  if (!confirm(`Add this entry to the "${lcLabel(data.lc)}" tab in LCs Balances?\n\n${sideTxt}: ${fmt(data.amount, 2)} ${data.currency}\nDate: ${data.date}\nDescription: ${data.description}` +
+    (data.payment ? `\nWay of payment: ${data.payment}` : ''))) return;
+  const r = await api('lcAdd', data);
+  toast(`Saved in ${lcLabel(data.lc)} (entry ${r.entryNo}, row ${r.row}). New balance: ${fmt(Number(r.balance.EGP) || 0)} EGP`);
+  $('rsAmount').value = ''; $('rsPay').value = '';
+  if (data.side === 'credit') $('rsDesc').value = 'Cash added to Reserve';
+  await loadReserve();
+}));
+
 // ===================================================================== login
 function showLogin(msg) {
   INIT = null;
@@ -1192,9 +1287,29 @@ function demoParse(a1) {
 function demoLast(s) { let r = 0, c = 0; Object.keys(demoBook[s].cells).forEach(k => { if (filled(demoBook[s].cells[k])) { const [a, b] = k.split(',').map(Number); r = Math.max(r, a); c = Math.max(c, b); } }); return { r, c }; }
 function demoGet(s, r, c) { const v = demoBook[s].cells[r + ',' + c]; return v === undefined ? '' : v; }
 
+// Demo copy of LCs Balances (fake numbers)
+const demoLcs = ['AAST-Cairo', 'ASU', 'AUC', 'CU', 'GUC', 'Helwan', 'Mansoura', 'Menofia', 'MUST', 'MIU', 'Suez', 'Tanta', 'Zagazig', '6th of october uni', 'AAST-Alex', 'Alexandria', 'New Capital', 'Galala']
+  .map((name, i) => ({ name, opening: { EGP: 20000 + i * 7000, USD: 1000 + i * 300, EUR: 100 * i }, entries: [
+    { date: { d: '2026-10-20' }, description: 'Cash added to Reserve', payment: '', comment: '', debit: {}, credit: { EGP: 5000 + i * 1000 } },
+    { date: { d: '2026-10-30' }, description: 'Q3 2026 Fees', payment: '', comment: '', debit: { EGP: 15000 + i * 2000 }, credit: {} }] }));
+function demoLcBal(l) {
+  const b = Object.assign({}, l.opening);
+  l.entries.forEach(e => ['EGP', 'USD', 'EUR'].forEach(c => { b[c] += (Number(e.credit[c]) || 0) - (Number(e.debit[c]) || 0); }));
+  return b;
+}
+
 async function demoRpc(action, d) {
   await new Promise(r => setTimeout(r, 60));
   if (action === 'login') { if (d.password !== 'demo1234') throw new Error('Wrong username or password'); return { token: 'demo', user: d.username }; }
+  if (action === 'lcBalances') return demoLcs.map(l => ({ name: l.name, period: 'Q3-Q4 2026', balance: demoLcBal(l), entries: l.entries.map((e, i) => Object.assign({ row: 5 + i, no: i + 1 }, e)), free: 25 - l.entries.length }));
+  if (action === 'lcAdd') {
+    const l = demoLcs.find(x => x.name === d.lc); if (!l) throw new Error('Unknown LC');
+    if (!(Number(d.amount) > 0)) throw new Error('Amount must be more than 0');
+    if (l.entries.length >= 25) throw new Error('Rows 5–29 are full');
+    const e = { date: { d: d.date }, description: d.description, payment: d.payment || '', comment: 'Added from website', debit: {}, credit: {} };
+    e[d.side][d.currency] = Number(d.amount); l.entries.push(e);
+    return { row: 4 + l.entries.length, entryNo: l.entries.length, balance: demoLcBal(l) };
+  }
   if (action === 'meta') return { user: store.get('fin_user') || 'Demo', version: 2, today: today(),
     sheets: Object.keys(demoBook).map(name => { const l = demoLast(name); return { name, rows: l.r, cols: l.c, maxRows: demoBook[name].maxRows }; }) };
   if (action === 'read') return d.ranges.map(a1 => { const p = demoParse(a1), out = [];

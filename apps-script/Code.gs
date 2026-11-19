@@ -15,7 +15,7 @@
 
 const USERS = 'Users';
 const SESSION_DAYS = 7;
-const VERSION = 2;
+const VERSION = 3;
 
 // ---------------------------------------------------------------- web entry
 function doGet() {
@@ -42,6 +42,8 @@ function route_(action, d, user) {
   if (action === 'meta') return meta_(user);
   if (action === 'read') return read_(d.ranges || []);
   if (action === 'write') return withLock_(() => write_(d.ops || []));
+  if (action === 'lcBalances') return lcBalances_();
+  if (action === 'lcAdd') return withLock_(() => lcAdd_(d, user));
   throw new Error('Unknown action: ' + action);
 }
 
@@ -135,6 +137,77 @@ function write_(ops) {
     }
     throw new Error('Unknown write: ' + o.op);
   });
+}
+
+// ---------------------------------------------------------------- LCs Balances (a separate, sensitive sheet)
+// The website can ONLY: read the 18 LC tabs, and add ONE new entry into the first free row between rows 5 and 29
+// (the rows that the totals in row 51 add up), columns B..K. It can never change existing rows, column A
+// (entry numbers), the totals/formulas, the "Total Balance" tab or any other tab.
+const LC_BOOK_ID = '1y_X7Hj8z7Lzpo4G5myybPErnI87A_CxeoD_A-PDi7lY';
+const LC_TABS = ['AAST-Cairo', 'ASU', 'AUC', 'CU', 'GUC', 'Helwan', 'Mansoura', 'Menofia', 'MUST', 'MIU', 'Suez', 'Tanta',
+  'Zagazig', '6th of october uni', 'AAST-Alex', 'Alexandria', 'New Capital', 'Galala'];
+const LC_FIRST = 5, LC_LAST = 29, LC_BALANCE_ROW = 52;
+const LC_COL = { date: 2, desc: 3, debit: { EGP: 4, USD: 5, EUR: 6 }, credit: { EGP: 7, USD: 8, EUR: 9 }, payment: 10, comment: 11 };
+
+function lcTab_(name) {
+  if (LC_TABS.indexOf(name) < 0) throw new Error('Unknown LC');
+  const sh = SpreadsheetApp.openById(LC_BOOK_ID).getSheetByName(name);
+  if (!sh) throw new Error('LC tab not found: ' + name);
+  return sh;
+}
+
+function lcBalances_() {
+  const book = SpreadsheetApp.openById(LC_BOOK_ID);
+  return LC_TABS.map(name => {
+    const sh = book.getSheetByName(name);
+    if (!sh) return { name: name, missing: true };
+    const bal = sh.getRange(LC_BALANCE_ROW, 7, 1, 3).getValues()[0];
+    const rows = sh.getRange(LC_FIRST, 1, LC_LAST - LC_FIRST + 1, 11).getValues();
+    const entries = [];
+    rows.forEach((r, i) => {
+      if (!r.slice(1, 11).some(v => v !== '' && v !== null)) return;
+      entries.push({ row: LC_FIRST + i, no: r[0], date: out_(r[1]), description: String(r[2]),
+        debit: { EGP: r[3], USD: r[4], EUR: r[5] }, credit: { EGP: r[6], USD: r[7], EUR: r[8] }, payment: String(r[9]), comment: String(r[10]) });
+    });
+    return { name: name, period: String(sh.getRange(1, 1).getValue()), balance: { EGP: bal[0], USD: bal[1], EUR: bal[2] }, entries: entries, free: LC_LAST - LC_FIRST + 1 - lastUsedLc_(rows) };
+  });
+}
+
+// number of rows used up to the last filled one (rows 5..29), looking at columns B..K only
+function lastUsedLc_(rows) {
+  for (let i = rows.length - 1; i >= 0; i--) if (rows[i].slice(1, 11).some(v => v !== '' && v !== null)) return i + 1;
+  return 0;
+}
+
+function lcAdd_(d, user) {
+  const sh = lcTab_(d.lc);
+  const amount = Number(d.amount);
+  if (!(amount > 0)) throw new Error('Amount must be more than 0');
+  if (d.side !== 'credit' && d.side !== 'debit') throw new Error('Choose Credit or Debit');
+  if (['EGP', 'USD', 'EUR'].indexOf(d.currency) < 0) throw new Error('Choose a currency');
+  const desc = String(d.description || '').trim();
+  if (!desc) throw new Error('Write a description');
+  const date = in_({ d: String(d.date || '') });
+  const rows = sh.getRange(LC_FIRST, 1, LC_LAST - LC_FIRST + 1, 11).getValues();
+  const row = LC_FIRST + lastUsedLc_(rows);
+  if (row > LC_LAST) throw new Error('Rows 5–29 of ' + d.lc + ' are full. Add the entry in the sheet by hand (and extend the totals).');
+  const target = sh.getRange(row, 2, 1, 10); // B..K only
+  if (target.getValues()[0].some(v => v !== '' && v !== null)) throw new Error('That row is not empty. Nothing was written.');
+  const vals = ['', '', '', '', '', '', '', '', '', ''];
+  vals[LC_COL.date - 2] = date;
+  vals[LC_COL.desc - 2] = desc;
+  vals[LC_COL[d.side][d.currency] - 2] = amount;
+  vals[LC_COL.payment - 2] = String(d.payment || '').trim();
+  vals[LC_COL.comment - 2] = 'Added from website by ' + user;
+  target.setValues([vals]); // values only: the cells keep the sheet's own formats
+  SpreadsheetApp.flush();
+  const bal = sh.getRange(LC_BALANCE_ROW, 7, 1, 3).getValues()[0];
+  return { row: row, entryNo: sh.getRange(row, 1).getValue(), balance: { EGP: bal[0], USD: bal[1], EUR: bal[2] } };
+}
+
+// Run this once from the Apps Script editor (Run ▶) to give the connector permission to open the LCs Balances sheet.
+function testLcAccess() {
+  Logger.log('OK: ' + SpreadsheetApp.openById(LC_BOOK_ID).getName());
 }
 
 // ---------------------------------------------------------------- login
