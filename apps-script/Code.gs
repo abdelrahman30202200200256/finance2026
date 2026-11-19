@@ -193,13 +193,10 @@ function lcAdd_(d, user) {
   if (row > LC_LAST) throw new Error('Rows 5–29 of ' + d.lc + ' are full. Add the entry in the sheet by hand (and extend the totals).');
   const target = sh.getRange(row, 2, 1, 10); // B..K only
   if (target.getValues()[0].some(v => v !== '' && v !== null)) throw new Error('That row is not empty. Nothing was written.');
-  const vals = ['', '', '', '', '', '', '', '', '', ''];
-  vals[LC_COL.date - 2] = date;
-  vals[LC_COL.desc - 2] = desc;
-  vals[LC_COL[d.side][d.currency] - 2] = amount;
-  vals[LC_COL.payment - 2] = String(d.payment || '').trim();
-  vals[LC_COL.comment - 2] = 'Added from website by ' + user;
-  target.setValues([vals]); // values only: the cells keep the sheet's own formats
+  // Write ONLY 3 cells: date (B), description (C) and the amount in its debit/credit currency column.
+  // Way of payment and Comment are never written. Values only: the cells keep the sheet's own formats.
+  sh.getRange(row, LC_COL.date, 1, 2).setValues([[date, desc]]);
+  sh.getRange(row, LC_COL[d.side][d.currency]).setValue(amount);
   SpreadsheetApp.flush();
   const bal = sh.getRange(LC_BALANCE_ROW, 7, 1, 3).getValues()[0];
   return { row: row, entryNo: sh.getRange(row, 1).getValue(), balance: { EGP: bal[0], USD: bal[1], EUR: bal[2] } };
