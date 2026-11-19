@@ -7,7 +7,7 @@
 <link rel="icon" href="assets/fakka.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Lilita+One&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   /* ---------- Baksana Forever: dollar green + gold ---------- */
   :root {
@@ -196,6 +196,73 @@
   .pw { position: relative; }
   .pw input { padding-right: 44px; }
   .pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; cursor: pointer; font-size: 16px; padding: 4px 8px; filter: grayscale(1) brightness(1.6); }
+
+  /* ---------- Doodles floating in the background ---------- */
+  #doodles { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  #doodles img { position: absolute; opacity: .16; animation: drift 14s ease-in-out infinite; filter: saturate(.9); }
+  @keyframes drift { 0%,100% { transform: translate(0,0) rotate(var(--r)); } 50% { transform: translate(var(--dx), -18px) rotate(calc(var(--r) * -1)); } }
+  @media (prefers-reduced-motion: reduce) { #doodles img { animation: none; } }
+
+  /* Home hero: text + team photo */
+  .hero2 { display: grid; grid-template-columns: 1.05fr 1fr; gap: 34px; align-items: center; margin: 10px 0 6px; }
+  .hero2 .hero { text-align: left; margin: 0; }
+  .hero2 .hero h2 { font-size: 46px; line-height: 1.05; }
+  .hero2 .hero p { font-size: 16px; margin-top: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; border: 1.5px solid var(--line-soft); border-radius: 999px; padding: 5px 12px 5px 6px; font-size: 12px; color: var(--ink); background: rgba(0,0,0,.2); text-decoration: none; transition: border-color .15s, box-shadow .15s; }
+  .chip:hover { border-color: var(--gold); box-shadow: 0 0 12px var(--glow); }
+  .chip img { width: 24px; height: 24px; }
+  .polaroid { position: relative; justify-self: center; background: #fdf8ec; padding: 12px 12px 46px; border-radius: 6px; transform: rotate(2.5deg);
+    box-shadow: 0 18px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.1); max-width: 470px; width: 100%; transition: transform .3s; }
+  .polaroid:hover { transform: rotate(0deg) scale(1.02); }
+  .polaroid img.photo { display: block; width: 100%; border-radius: 3px; }
+  .polaroid figcaption { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-family: var(--title); color: #0e5230; font-size: 22px; letter-spacing: .5px; }
+  .polaroid::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 26px; transform: translateX(-50%) rotate(-3deg); background: rgba(248,211,58,.75); box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+  .polaroid .dood { position: absolute; width: 74px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+  .polaroid .d1 { left: -40px; bottom: 20px; --rot: -12deg; }
+  .polaroid .d2 { right: -34px; top: -30px; --rot: 10deg; animation-delay: -1.4s; }
+  .polaroid .d3 { right: -26px; bottom: -22px; width: 62px; --rot: -6deg; animation-delay: -2.1s; }
+  @media (max-width: 860px) { .hero2 { grid-template-columns: 1fr; } .hero2 .hero { text-align: center; } .chips { justify-content: center; } .polaroid { max-width: 400px; } .polaroid .dood { width: 56px; } .polaroid .d1 { left: -18px; } .polaroid .d2 { right: -14px; } .polaroid .d3 { right: -10px; } }
+  .box .ico { position: absolute; right: 16px; top: 14px; width: 40px; opacity: .55; transition: opacity .2s, transform .2s; }
+  .box:hover .ico { opacity: 1; transform: rotate(-8deg) scale(1.08); }
+  .page-head .ico { width: 40px; margin-left: auto; opacity: .7; }
+
+  /* Ticker of money icons */
+  .ticker { overflow: hidden; margin: 34px 0 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); padding: 12px 0;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+  .ticker .track { display: flex; gap: 46px; width: max-content; animation: tick 40s linear infinite; }
+  .ticker img { width: 36px; opacity: .8; }
+  @keyframes tick { to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .ticker .track { animation: none; } }
+
+  /* In loving memory */
+  .tribute { position: relative; margin: 46px auto 10px; max-width: 900px; display: grid; grid-template-columns: 300px 1fr; gap: 34px; align-items: center;
+    padding: 34px 38px; border-radius: 26px; background: linear-gradient(160deg, rgba(10,14,12,.92), rgba(18,24,20,.88)); border: 1px solid rgba(248,211,58,.45);
+    box-shadow: 0 0 0 6px rgba(248,211,58,.06), 0 24px 60px rgba(0,0,0,.5); }
+  .tribute .frame { position: relative; justify-self: center; width: 260px; height: 320px; border-radius: 130px 130px 18px 18px; padding: 6px;
+    background: linear-gradient(180deg, #f8d33a, #8a6d10 70%, #f8d33a); box-shadow: 0 0 40px rgba(248,211,58,.25); }
+  .tribute .frame img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; border-radius: 124px 124px 13px 13px; display: block; filter: grayscale(1) contrast(1.05); }
+  .tribute .frame::after { content: ""; position: absolute; inset: 6px; border-radius: 124px 124px 13px 13px; background: linear-gradient(180deg, transparent 60%, rgba(10,14,12,.55)); }
+  .tribute .candle { position: absolute; left: 50%; bottom: -40px; transform: translateX(-50%); width: 16px; height: 34px; border-radius: 4px; background: linear-gradient(180deg, #fff6dc, #e9d9ae); box-shadow: 0 0 0 1px rgba(0,0,0,.2); z-index: 2; }
+  .tribute .candle::before { content: ""; position: absolute; left: 50%; top: -22px; width: 12px; height: 20px; transform: translateX(-50%); border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    background: radial-gradient(circle at 50% 70%, #fff 0 18%, #ffd65a 40%, #ff8a1d 75%, transparent 76%); filter: drop-shadow(0 0 10px #ffb12b) drop-shadow(0 0 22px rgba(255,170,40,.7)); animation: flicker 2.2s ease-in-out infinite; transform-origin: 50% 100%; }
+  @keyframes flicker { 0%,100% { transform: translateX(-50%) scale(1) rotate(-2deg); } 30% { transform: translateX(-50%) scale(1.08, .94) rotate(2deg); } 60% { transform: translateX(-50%) scale(.95, 1.06) rotate(-1deg); } }
+  @media (prefers-reduced-motion: reduce) { .tribute .candle::before { animation: none; } }
+  .tribute .words { font-family: "Cormorant Garamond", Georgia, serif; color: #ece8df; text-align: center; }
+  .tribute .kicker { font-family: var(--body); letter-spacing: 5px; font-size: 11px; text-transform: uppercase; color: var(--gold); }
+  .tribute .name { font-size: 50px; line-height: 1; letter-spacing: 2px; margin: 8px 0 6px; font-weight: 500; color: #fff; }
+  .tribute .role { font-family: var(--body); letter-spacing: 2px; font-size: 11px; text-transform: uppercase; color: #bdb8ad; }
+  .tribute .rule { width: 120px; height: 1px; margin: 16px auto; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+  .tribute p { font-size: 19px; line-height: 1.5; margin: 0; font-style: italic; color: #e2ddd2; }
+  .tribute .never { font-family: var(--body); letter-spacing: 4px; font-size: 12px; text-transform: uppercase; color: var(--gold); margin-top: 18px; }
+  @media (max-width: 760px) { .tribute { grid-template-columns: 1fr; padding: 30px 20px 26px; gap: 40px; } .tribute .frame { width: 220px; height: 270px; } .tribute .name { font-size: 38px; } .tribute p { font-size: 17px; } }
+
+  html, body { overflow-x: clip; }
+  @media (max-width: 760px) { #whoami { display: none; } }
+  /* Footer */
+  footer.site { position: relative; z-index: 1; text-align: center; padding: 18px 16px 30px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line-soft); background: rgba(3,30,16,.55); }
+  footer.site a { color: var(--gold); text-decoration: none; }
+  footer.site a:hover { text-shadow: 0 0 10px var(--glow); }
 </style>
 </head>
 <body>
@@ -205,6 +272,8 @@
   <h1><a class="brand" href="#home"><img src="assets/fakka.png" alt=""><span>Baksana Forever</span><img src="assets/estakka.png" alt=""></a></h1>
   <div class="h-right"><span id="whoami" class="muted small hidden"></span><button id="logoutBtn" class="hidden">Log out</button></div>
 </header>
+
+<div id="doodles" aria-hidden="true"></div>
 
 <!-- characters in the empty space on wide screens -->
 <div class="gutter-art" style="left:3vw;top:150px"><img class="sticker float" style="--rot:-7deg" alt=""></div>
@@ -238,34 +307,64 @@
 
   <!-- HOME: the three boxes -->
   <section id="page-home" class="hidden">
-    <div class="hero">
-      <h2 id="heroHi">Welcome back</h2>
-      <p>What do we count today?</p>
+    <div class="hero2">
+      <div class="hero">
+        <h2 id="heroHi">Welcome back</h2>
+        <p>What do we count today?</p>
+        <div class="chips">
+          <a class="chip" href="#cashflow"><img src="assets/icons/exchange.png" alt="">Cash flow</a>
+          <a class="chip" href="#events"><img src="assets/icons/report.png" alt="">Event budgets</a>
+          <a class="chip" href="#reserve"><img src="assets/icons/safe.png" alt="">Reserve</a>
+        </div>
+      </div>
+      <figure class="polaroid" style="margin:0">
+        <img class="photo" src="assets/team.jpg" alt="The finance team">
+        <figcaption>The Baksana family 💚</figcaption>
+        <img class="dood d1 float" src="assets/doodles/dollar.png" alt="">
+        <img class="dood d2 float" src="assets/doodles/chart.png" alt="">
+        <img class="dood d3 float" src="assets/doodles/bulb.png" alt="">
+      </figure>
     </div>
     <div class="boxes">
       <a class="box" href="#cashflow">
-        <img class="sticker" src="assets/sekanowa.png" alt="">
+        <img class="sticker" src="assets/sekanowa.png" alt=""><img class="ico" src="assets/icons/exchange.png" alt="">
         <h2>Cash flow</h2>
         <p>Add a revenue or an expense. It goes straight into [MAIN] Cashflow in the finance sheet.</p>
       </a>
       <a class="box" href="#events">
-        <img class="sticker" src="assets/hoba.png" alt="">
+        <img class="sticker" src="assets/hoba.png" alt=""><img class="ico" src="assets/icons/report.png" alt="">
         <h2>Create event budget</h2>
         <p>Plan an event's revenues and expenses, then track actual money against the budget.</p>
       </a>
       <a class="box" href="#reserve">
-        <img class="sticker" src="assets/estakka.png" alt="">
+        <img class="sticker" src="assets/estakka.png" alt=""><img class="ico" src="assets/icons/safe.png" alt="">
         <h2>Cash added to reserve</h2>
         <p>Add a credit or debit to an LC's reserve in the LCs Balances sheet, and see every LC's balance.</p>
       </a>
     </div>
     <div class="parade" id="parade"></div>
+    <div class="ticker" aria-hidden="true"><div class="track" id="ticker"></div></div>
+
+    <section class="tribute" id="memory" aria-label="In loving memory of Youssef Khaled">
+      <div class="frame"><img src="assets/youssef.jpg" alt="Youssef Khaled"><span class="candle"></span></div>
+      <div class="words">
+        <div class="kicker">In loving memory of</div>
+        <div class="name">Youssef Khaled</div>
+        <div class="role">MCVP F&amp;L · 24.25 term · AIESEC in Egypt</div>
+        <div class="rule"></div>
+        <p>Today, we lost more than a teammate. We lost a brother, a friend, a light in our lives.
+          Youssef was the kind of person who made everything better with a smile, with his support, with his heart.
+          He stood by each of us, in every moment, always giving more than he had.
+          We'll carry your love and legacy with us, always.</p>
+        <div class="never">You'll never be forgotten</div>
+      </div>
+    </section>
   </section>
 
   <!-- CASH FLOW -->
   <section id="page-cashflow" class="hidden">
     <a class="back" href="#home">← Home</a>
-    <div class="page-head"><img class="sticker float" src="assets/sekanowa.png" alt=""><h2>Cash flow</h2></div>
+    <div class="page-head"><img class="sticker float" src="assets/sekanowa.png" alt=""><h2>Cash flow</h2><img class="ico" src="assets/icons/exchange.png" alt=""></div>
     <div class="tiles" id="cfTiles"></div>
     <div class="grid2">
       <div class="card">
@@ -295,7 +394,7 @@
     <a class="back" href="#home">← Home</a>
     <div class="card" style="max-width:760px">
       <div class="row" style="margin-bottom:6px">
-        <div class="page-head" style="margin:0"><img class="sticker float" src="assets/hoba.png" alt=""><h2>Event budgets</h2></div>
+        <div class="page-head" style="margin:0"><img class="sticker float" src="assets/hoba.png" alt=""><h2>Event budgets</h2><img class="ico" src="assets/icons/report.png" alt=""></div>
         <div style="flex:0 0 auto"><a class="btn" href="#new-event" style="text-decoration:none;display:inline-block">+ Create event budget</a></div>
       </div>
       <div class="event-list" id="eventList"></div>
@@ -306,7 +405,7 @@
   <section id="page-new-event" class="hidden">
     <a class="back" href="#events">← Event budgets</a>
     <div class="card" style="max-width:860px">
-      <div class="page-head"><img class="sticker float" src="assets/hoba.png" alt=""><h2>Create event budget</h2></div>
+      <div class="page-head"><img class="sticker float" src="assets/hoba.png" alt=""><h2>Create event budget</h2><img class="ico" src="assets/icons/idea.png" alt=""></div>
       <div class="steps" id="wzSteps"></div>
       <div id="wzBody"></div>
       <div class="wiz-nav">
@@ -319,7 +418,7 @@
   <!-- EVENT DETAIL -->
   <section id="page-event" class="hidden">
     <a class="back" href="#events">← Event budgets</a>
-    <div class="page-head"><img class="sticker float" src="assets/fakka.png" alt=""><h2 id="evTitle"></h2></div>
+    <div class="page-head"><img class="sticker float" src="assets/fakka.png" alt=""><h2 id="evTitle"></h2><img class="ico" src="assets/icons/pie.png" alt=""></div>
     <div class="tiles" id="evTiles"></div>
     <div class="grid2">
       <div>
@@ -361,7 +460,7 @@
   <!-- RESERVE -->
   <section id="page-reserve" class="hidden">
     <a class="back" href="#home">← Home</a>
-    <div class="page-head"><img class="sticker float" src="assets/estakka.png" alt=""><h2>Cash added to reserve</h2></div>
+    <div class="page-head"><img class="sticker float" src="assets/estakka.png" alt=""><h2>Cash added to reserve</h2><img class="ico" src="assets/icons/safe.png" alt=""></div>
     <div class="grid2">
       <div class="card">
         <h3>New entry in an LC's reserve</h3>
@@ -389,6 +488,8 @@
     </div>
   </section>
 </main>
+
+<footer class="site">Baksana Forever · AIESEC in Egypt Finance &nbsp;·&nbsp; <a href="#home" id="memLink">🕯 In memory of Youssef Khaled</a></footer>
 
 <div id="toast" class="hidden"></div>
 
@@ -752,6 +853,18 @@ const CHARACTERS = [
   // Side characters on wide screens: a different random mix each time the page opens
   const mix = CHARACTERS.slice().sort(() => Math.random() - .5);
   document.querySelectorAll('.gutter-art img').forEach((img, i) => { img.src = 'assets/' + mix[i % mix.length].file; });
+  // Money icons sliding under the characters (list twice so the loop is seamless)
+  const ICONS = ['sheet','hands','report','tablet','safe','exchange','idea','bags','search','time','bank','piggy','shield','handbag','pie','wallet'];
+  $('ticker').innerHTML = ICONS.concat(ICONS).map(n => `<img src="assets/icons/${n}.png" alt="">`).join('');
+  // Doodles drifting in the background, spread on a loose grid
+  const DOODLES = ['calculator','dollar','arrow','bulb','chart','card','phone','key'];
+  const spots = []; for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) spots.push([r, c]);
+  $('doodles').innerHTML = spots.sort(() => Math.random() - .5).slice(0, 10).map(([r, c], i) => {
+    const top = r * 25 + 3 + Math.random() * 14, left = c * 25 + 2 + Math.random() * 16, w = 54 + Math.round(Math.random() * 36);
+    return `<img src="assets/doodles/${DOODLES[i % DOODLES.length]}.png" alt="" style="top:${top}%;left:${left}%;width:${w}px;--r:${Math.round(Math.random() * 30 - 15)}deg;--dx:${Math.round(Math.random() * 30 - 15)}px;animation-delay:-${(Math.random() * 14).toFixed(1)}s">`;
+  }).join('');
+  // Footer link scrolls to the tribute on the home page
+  $('memLink').addEventListener('click', () => setTimeout(() => $('memory').scrollIntoView({ behavior: 'smooth', block: 'center' }), 150));
 })();
 
 // ===================================================================== type-to-filter menus
