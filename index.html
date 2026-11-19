@@ -263,6 +263,37 @@
   footer.site { position: relative; z-index: 1; text-align: center; padding: 18px 16px 30px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line-soft); background: rgba(1,16,8,.6); }
   footer.site a { color: var(--gold); text-decoration: none; }
   footer.site a:hover { text-shadow: 0 0 10px var(--glow); }
+
+  /* Petty cash dashboard */
+  @media (min-width: 760px) { .boxes { grid-template-columns: repeat(2, 1fr); } }
+  .pc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .pc-grid > * { min-width: 0; }
+  @media (max-width: 960px) { .pc-grid { grid-template-columns: 1fr; } }
+  .hbars { display: grid; grid-template-columns: minmax(90px, 140px) 1fr; gap: 6px 12px; align-items: center; font-size: 12px; }
+  .hbars .nm { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .hbars .nm:hover { color: var(--gold); }
+  .hbars .track { position: relative; height: 22px; }
+  .hbars .zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: rgba(255,255,255,.35); }
+  .hbars .fill { position: absolute; top: 3px; height: 16px; background: var(--gold); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .hbars .fill.minus { background: var(--bad); border-radius: 4px 0 0 4px; }
+  .hbars .val { position: absolute; top: 2px; font-size: 11px; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  @media (max-width: 520px) { .hbars, .use { grid-template-columns: 92px 1fr auto; } .hbars { grid-template-columns: 92px 1fr; } }
+  .use { display: grid; grid-template-columns: minmax(90px, 140px) 1fr 64px; gap: 8px 12px; align-items: center; font-size: 12px; }
+  .use .meter { height: 10px; border-radius: 5px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .use .meter span { display: block; height: 100%; background: linear-gradient(90deg, #5ea845, var(--gold)); border-radius: 5px; }
+  .use .meter span.over { background: var(--bad); }
+  .use .pct { text-align: right; font-variant-numeric: tabular-nums; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+  .months { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; align-items: end; height: 200px; padding: 0 4px; border-bottom: 1px solid rgba(255,255,255,.3); }
+  .months .m { display: flex; align-items: flex-end; justify-content: center; gap: 3px; height: 100%; position: relative; }
+  .months .b { width: 40%; max-width: 26px; border-radius: 4px 4px 0 0; min-height: 2px; }
+  .months .b.bud { background: transparent; border: 2px solid var(--line); border-bottom: 0; }
+  .months .b.act { background: var(--gold); }
+  .months .b.act.over { background: var(--bad); }
+  .mlabels { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; font-size: 11px; color: var(--muted); text-align: center; margin-top: 6px; }
+  tr.pc-row { cursor: pointer; } tr.pc-row.sel td { background: rgba(248,211,58,.08); }
+  #pcTip { position: fixed; z-index: 50; pointer-events: none; background: #03180c; border: 1px solid var(--gold); border-radius: 10px; padding: 7px 10px; font-size: 12px; box-shadow: 0 8px 20px rgba(0,0,0,.5); }
 </style>
 </head>
 <body>
@@ -315,6 +346,7 @@
           <a class="chip" href="#cashflow"><img src="assets/icons/exchange.png" alt="">Cash flow</a>
           <a class="chip" href="#events"><img src="assets/icons/report.png" alt="">Event budgets</a>
           <a class="chip" href="#reserve"><img src="assets/icons/safe.png" alt="">LC balances</a>
+          <a class="chip" href="#petty"><img src="assets/icons/wallet.png" alt="">Petty cash</a>
         </div>
       </div>
       <figure class="polaroid" style="margin:0">
@@ -340,6 +372,11 @@
         <img class="sticker" src="assets/estakka.png" alt=""><img class="ico" src="assets/icons/safe.png" alt="">
         <h2>LC balances</h2>
         <p>Add a credit or debit to an LC's reserve in the LCs Balances sheet, and see every LC's balance.</p>
+      </a>
+      <a class="box" href="#petty">
+        <img class="sticker" src="assets/azooza.png" alt=""><img class="ico" src="assets/icons/wallet.png" alt="">
+        <h2>Petty cash</h2>
+        <p>AIESEC in Egypt petty cash dashboard: every LC's petty cash, budget and spending in one place.</p>
       </a>
     </div>
     <div class="parade" id="parade"></div>
@@ -488,6 +525,20 @@
       </div>
     </div>
   </section>
+
+  <!-- PETTY CASH DASHBOARD (read only) -->
+  <section id="page-petty" class="hidden">
+    <a class="back" href="#home">← Home</a>
+    <div class="page-head"><img class="sticker float" src="assets/azooza.png" alt=""><h2>Petty cash · AIESEC in Egypt</h2><img class="ico" src="assets/icons/wallet.png" alt=""></div>
+    <div class="tiles" id="pcTiles"></div>
+    <div class="pc-grid">
+      <div class="card"><h3>Petty cash by LC</h3><p class="muted small" style="margin:-6px 0 12px">Total in EGP (EGP + USD + EUR). Red = negative.</p><div class="hbars" id="pcBars"></div></div>
+      <div class="card"><h3>Budget used by LC</h3><p class="muted small" style="margin:-6px 0 12px">Actual expenses ÷ budgeted expenses. Red = over budget.</p><div class="use" id="pcUse"></div></div>
+    </div>
+    <div class="card" id="pcDetail"></div>
+    <div class="card"><h3>All LCs</h3><div class="table-wrap"><table id="pcTable"></table></div>
+      <p class="muted small" id="pcNote" style="margin:10px 0 0"></p></div>
+  </section>
 </main>
 
 <footer class="site">Baksana Forever · AIESEC in Egypt Finance &nbsp;·&nbsp; <a href="#home" id="memLink">🕯 In memory of Youssef Khaled</a></footer>
@@ -555,6 +606,7 @@ const LOGIC = {
   // LCs Balances (separate sensitive sheet): the connector only allows reading and adding one entry
   async lcBalances() { return rpc('lcBalances'); },
   async lcAdd(d) { return rpc('lcAdd', d); },
+  async pettyCash() { return rpc('pettyCash'); },
 
   async init() {
     const [, [is]] = await Promise.all([refreshMeta(), read(A1(IS, 1, 3, 140, 4))]);
@@ -926,7 +978,7 @@ function setSelect(sel, v) { sel.value = v; if (sel._sync) sel._sync(); }
 
 // ===================================================================== routing
 let INIT = null;
-const PAGES = ['connect', 'home', 'cashflow', 'events', 'new-event', 'event', 'reserve'];
+const PAGES = ['connect', 'home', 'cashflow', 'events', 'new-event', 'event', 'reserve', 'petty'];
 function show(name) {
   const was = PAGES.find(p => !$('page-' + p).classList.contains('hidden'));
   PAGES.forEach(p => $('page-' + p).classList.toggle('hidden', p !== name));
@@ -943,6 +995,7 @@ function route() {
   if (page === 'events') loadEvents();
   if (page === 'new-event') wzStart();
   if (page === 'reserve') loadReserve();
+  if (page === 'petty') loadPetty();
 }
 window.addEventListener('hashchange', route);
 
@@ -1328,6 +1381,89 @@ $('rsSave').addEventListener('click', e => busy(e.target, async () => {
   await loadReserve();
 }));
 
+
+// ===================================================================== petty cash dashboard (read only)
+let PC = null, PC_SEL = '';
+async function loadPetty() {
+  $('pcBars').innerHTML = '<span class="muted">Loading petty cash…</span>';
+  try { PC = await api('pettyCash'); renderPetty(); }
+  catch (err) {
+    $('pcBars').innerHTML = '';
+    toast(/Unknown action/.test(err.message) || /old version/.test(err.message) ? 'Update the connector (Code.gs version 4) to see petty cash.' : err.message, true);
+  }
+}
+const pct = (a, b) => b ? a / b : 0;
+function renderPetty() {
+  const L = PC.lcs, sum = k => L.reduce((t, l) => t + (Number(l[k]) || 0), 0);
+  const tot = { EGP: sum('EGP'), USD: sum('USD'), EUR: sum('EUR'), totalEGP: sum('totalEGP'), budget: sum('budget'), actual: sum('actual') };
+  const over = L.filter(l => l.budget && l.actual > l.budget).length, neg = L.filter(l => l.totalEGP < 0).length;
+  $('pcTiles').innerHTML =
+    tile('Total petty cash · EGP', fmt(tot.totalEGP), `${L.length} LCs, all currencies in EGP`) +
+    tile('Cash in EGP', fmt(tot.EGP), `USD ${fmt(tot.USD, 2)} · EUR ${fmt(tot.EUR, 2)}`) +
+    tile('Budgeted expenses', fmt(tot.budget), 'all LCs, this term') +
+    tile('Actual expenses', fmt(tot.actual), `${(pct(tot.actual, tot.budget) * 100).toFixed(1)}% of budget used`) +
+    tile('Watch list', `${over + neg}`, `${over} over budget · ${neg} negative cash`);
+  // Bars: petty cash per LC, sorted, with a zero line when some are negative
+  const sorted = L.slice().sort((a, b) => b.totalEGP - a.totalEGP);
+  const max = Math.max(0, ...sorted.map(l => l.totalEGP)), min = Math.min(0, ...sorted.map(l => l.totalEGP)), span = (max - min) || 1;
+  const z = -min / span * 100;
+  $('pcBars').innerHTML = sorted.map(l => {
+    const w = Math.abs(l.totalEGP) / span * 100, minus = l.totalEGP < 0;
+    const left = minus ? z - w : z, vPos = minus ? `right:${100 - left + 1}%` : `left:calc(${z + w}% + 6px)`;
+    return `<span class="nm" data-lc="${esc(l.name)}">${esc(l.name)}</span><div class="track" style="margin:0 58px 0 ${min < 0 ? 58 : 0}px" data-tip="${esc(l.name)}|Petty cash ${fmt(l.totalEGP)} EGP|EGP ${fmt(l.EGP)} · USD ${fmt(l.USD, 2)} · EUR ${fmt(l.EUR, 2)}">
+      ${min < 0 ? `<i class="zero" style="left:${z}%"></i>` : ''}<span class="fill${minus ? ' minus' : ''}" style="left:${left}%;width:${w}%"></span>
+      <span class="val" style="${vPos}">${fmt(l.totalEGP)}</span></div>`;
+  }).join('');
+  // Budget use per LC (cap the bar at 100%, show the real % as text)
+  const byUse = L.slice().sort((a, b) => pct(b.actual, b.budget) - pct(a.actual, a.budget));
+  $('pcUse').innerHTML = byUse.map(l => {
+    const p = pct(l.actual, l.budget), isOver = l.budget && l.actual > l.budget;
+    return `<span class="nm" data-lc="${esc(l.name)}" style="cursor:pointer">${esc(l.name)}</span>
+      <div class="meter" data-tip="${esc(l.name)}|Budget ${fmt(l.budget)} EGP|Actual ${fmt(l.actual)} EGP|${l.budget ? (isOver ? 'Over by ' + fmt(l.actual - l.budget) : 'Left ' + fmt(l.budget - l.actual)) + ' EGP' : 'No budget yet'}"><span class="${isOver ? 'over' : ''}" style="width:${Math.min(100, p * 100)}%"></span></div>
+      <span class="pct ${isOver ? 'neg' : 'muted'}">${l.budget ? (p * 100).toFixed(0) + '%' + (isOver ? ' ⚠' : '') : '–'}</span>`;
+  }).join('');
+  // Table
+  $('pcTable').innerHTML = '<tr><th>LC</th><th class="num">EGP</th><th class="num">USD</th><th class="num">EUR</th><th class="num">Total (EGP)</th><th class="num">Budgeted</th><th class="num">Actual</th><th class="num">Variance</th><th class="num">% used</th></tr>' +
+    L.map(l => `<tr class="pc-row${PC_SEL === l.name ? ' sel' : ''}" data-lc="${esc(l.name)}"><td><b>${esc(l.name)}</b></td><td class="num">${money(l.EGP)}</td><td class="num">${money(l.USD, 2)}</td><td class="num">${money(l.EUR, 2)}</td>
+      <td class="num"><b>${money(l.totalEGP)}</b></td><td class="num">${fmt(l.budget)}</td><td class="num">${fmt(l.actual)}</td><td class="num">${money(l.budget - l.actual)}</td>
+      <td class="num ${l.budget && l.actual > l.budget ? 'neg' : ''}">${l.budget ? (pct(l.actual, l.budget) * 100).toFixed(1) + '%' : '–'}</td></tr>`).join('') +
+    `<tr class="total"><td>Total</td><td class="num">${fmt(tot.EGP)}</td><td class="num">${fmt(tot.USD, 2)}</td><td class="num">${fmt(tot.EUR, 2)}</td><td class="num">${fmt(tot.totalEGP)}</td><td class="num">${fmt(tot.budget)}</td><td class="num">${fmt(tot.actual)}</td><td class="num">${fmt(tot.budget - tot.actual)}</td><td class="num">${(pct(tot.actual, tot.budget) * 100).toFixed(1)}%</td></tr>`;
+  $('pcNote').textContent = 'Read from the petty cash sheet ("All LCs" tab) on ' + PC.updated + '. The website only reads this sheet; it never changes it.';
+  if (!PC_SEL || !L.some(l => l.name === PC_SEL)) PC_SEL = sorted[0] ? sorted[0].name : '';
+  renderPettyLc();
+}
+function renderPettyLc() {
+  const l = PC.lcs.find(x => x.name === PC_SEL);
+  document.querySelectorAll('#pcTable tr.pc-row').forEach(tr => tr.classList.toggle('sel', tr.dataset.lc === PC_SEL));
+  if (!l) { $('pcDetail').innerHTML = ''; return; }
+  const ms = l.months || [], top = Math.max(1, ...ms.map(m => Math.max(m.budget, m.actual)));
+  $('pcDetail').innerHTML = `<h3>${esc(l.name)} · monthly expenses</h3>
+    <p class="muted small" style="margin:-6px 0 10px">Click any LC (bars or table) to see its months. Petty cash: <b style="color:var(--gold)">${fmt(l.totalEGP)} EGP</b> · budget used ${l.budget ? (pct(l.actual, l.budget) * 100).toFixed(1) + '%' : '–'}</p>
+    <div class="legend"><span><i style="border:2px solid var(--line)"></i>Budgeted</span><span><i style="background:var(--gold)"></i>Actual</span><span><i style="background:var(--bad)"></i>Actual over budget</span></div>
+    ${ms.length ? `<div class="months" style="grid-template-columns:repeat(${ms.length},1fr)">${ms.map(m => `<div class="m" data-tip="${esc(m.month)}|Budgeted ${fmt(m.budget)} EGP|Actual ${fmt(m.actual)} EGP|${m.budget ? (pct(m.actual, m.budget) * 100).toFixed(0) + '% used' : 'No budget'}">
+      <span class="b bud" style="height:${m.budget / top * 100}%"></span><span class="b act${m.actual > m.budget ? ' over' : ''}" style="height:${m.actual / top * 100}%"></span></div>`).join('')}</div>
+      <div class="mlabels" style="grid-template-columns:repeat(${ms.length},1fr)">${ms.map(m => `<span>${esc(m.month.slice(0, 3))}</span>`).join('')}</div>` : '<p class="muted">No monthly data in this LC\'s tab.</p>'}`;
+}
+$('page-petty').addEventListener('click', e => {
+  const t = e.target.closest('[data-lc]'); if (!t || !PC) return;
+  PC_SEL = t.dataset.lc; renderPettyLc();
+  if (!t.closest('#pcTable')) $('pcDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+// Hover tooltip for the dashboard (bars, meters, months)
+(() => {
+  const tip = document.createElement('div'); tip.id = 'pcTip'; tip.className = 'hidden'; document.body.appendChild(tip);
+  $('page-petty').addEventListener('mousemove', e => {
+    const t = e.target.closest('[data-tip]');
+    if (!t) { tip.classList.add('hidden'); return; }
+    const [h, ...rest] = t.dataset.tip.split('|');
+    tip.innerHTML = `<b style="color:var(--gold)">${esc(h)}</b><br>` + rest.map(esc).join('<br>');
+    tip.classList.remove('hidden');
+    const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  });
+  $('page-petty').addEventListener('mouseleave', () => tip.classList.add('hidden'));
+})();
+
 // ===================================================================== login
 function showLogin(msg) {
   INIT = null;
@@ -1435,9 +1571,23 @@ function demoLcBal(l) {
   return b;
 }
 
+
+// Made-up petty cash numbers for the demo (not the real sheet)
+function demoPetty() {
+  const names = ['AAST Cairo', 'MIU', 'MUST', 'Ain Shams', 'AAST Alexandria', '6th October', 'Suez', 'Tanta', 'Zagazig', 'New Capital', 'GUC', 'Cairo University', 'Mansoura', 'Beni Suef', 'Helwan', 'AUC', 'Menofia', 'Galala', 'Alexandria'];
+  const MONTHS = ['August', 'September', 'October', 'November', 'December', 'January'];
+  const lcs = names.map((name, i) => {
+    const r = k => ((Math.sin(i * 9.1 + k) + 1) / 2);
+    const months = MONTHS.map((month, j) => { const budget = Math.round(r(j) * 60) * 1000; return { month, budget, actual: j < 4 ? Math.round(budget * (0.3 + r(j + 7) * 1.1)) : 0 }; });
+    const EGP = Math.round((r(3) * 90000 - (i % 6 === 4 ? 100000 : 5000)) / 10) * 10, USD = i % 4 === 0 ? Math.round(r(5) * 300) : 0, EUR = i % 7 === 0 ? 50 : 0;
+    return { name, EGP, USD, EUR, totalEGP: EGP + USD * 48 + EUR * 56, budget: months.reduce((t, m) => t + m.budget, 0), actual: months.reduce((t, m) => t + m.actual, 0), months };
+  });
+  return { lcs, updated: today() + ' (demo)' };
+}
 async function demoRpc(action, d) {
   await new Promise(r => setTimeout(r, 60));
   if (action === 'login') { if (d.password !== 'demo1234') throw new Error('Wrong username or password'); return { token: 'demo', user: d.username }; }
+  if (action === 'pettyCash') return demoPetty();
   if (action === 'lcBalances') return demoLcs.map(l => ({ name: l.name, period: 'Q3-Q4 2026', balance: demoLcBal(l), entries: l.entries.map((e, i) => Object.assign({ row: 5 + i, no: i + 1 }, e)), free: 25 - l.entries.length }));
   if (action === 'lcAdd') {
     const l = demoLcs.find(x => x.name === d.lc); if (!l) throw new Error('Unknown LC');

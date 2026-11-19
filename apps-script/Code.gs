@@ -15,7 +15,7 @@
 
 const USERS = 'Users';
 const SESSION_DAYS = 7;
-const VERSION = 3;
+const VERSION = 4;
 
 // ---------------------------------------------------------------- web entry
 function doGet() {
@@ -44,6 +44,7 @@ function route_(action, d, user) {
   if (action === 'write') return withLock_(() => write_(d.ops || []));
   if (action === 'lcBalances') return lcBalances_();
   if (action === 'lcAdd') return withLock_(() => lcAdd_(d, user));
+  if (action === 'pettyCash') return pettyCash_();
   throw new Error('Unknown action: ' + action);
 }
 
@@ -318,3 +319,28 @@ function logoutEveryone() {
   Object.keys(p.getProperties()).forEach(k => { if (k.indexOf('s_') === 0) p.deleteProperty(k); });
   SpreadsheetApp.getUi().alert('Everyone is logged out of the website.');
 }
+
+// ---------------------------------------------------------------- Petty cash dashboard (READ ONLY)
+// The "All LCs" petty cash sheet. The website only reads it: nothing in this section writes, formats or deletes.
+const PETTY_BOOK_ID = '1tQaGEJyxngTzEPPGr1BhhWReIswqdRWBBtAwxa4LUL4';
+function pettyCash_() {
+  const book = SpreadsheetApp.openById(PETTY_BOOK_ID);
+  const all = book.getSheetByName('All LCs');
+  if (!all) throw new Error('The "All LCs" tab was not found in the petty cash sheet');
+  const n = v => (typeof v === 'number' ? v : Number(String(v).replace(/[^0-9.\-]/g, '')) || 0);
+  const lcs = [];
+  all.getRange(4, 1, 40, 9).getValues().some(r => {
+    const name = String(r[0]).trim();
+    if (!name) return false;
+    if (/^total$/i.test(name)) return true; // stop at the TOTAL row
+    const sh = book.getSheetByName(name);
+    const months = sh ? sh.getRange(10, 1, 6, 3).getValues().filter(m => String(m[0]).trim())
+      .map(m => ({ month: String(m[0]).trim(), budget: n(m[1]), actual: n(m[2]) })) : [];
+    lcs.push({ name: name, EGP: n(r[1]), USD: n(r[2]), EUR: n(r[3]), totalEGP: n(r[4]), budget: n(r[5]), actual: n(r[6]), months: months });
+    return false;
+  });
+  return { lcs: lcs, updated: Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd HH:mm') };
+}
+
+// Run once from the editor after pasting this version: it asks for permission to read the petty cash sheet.
+function testPettyAccess() { const r = pettyCash_(); Logger.log('OK: ' + r.lcs.length + ' LCs read'); }
