@@ -529,6 +529,7 @@ async function rpc(action, data) {
 async function api(action, data) {
   if (action === 'login') return rpc('login', data);
   if (!LOGIC[action]) throw new Error('Unknown action: ' + action);
+  if (action !== 'init') await READY;
   return LOGIC[action](data || {});
 }
 
@@ -556,9 +557,8 @@ const LOGIC = {
   async lcAdd(d) { return rpc('lcAdd', d); },
 
   async init() {
-    await refreshMeta();
+    const [, [is]] = await Promise.all([refreshMeta(), read(A1(IS, 1, 3, 140, 4))]);
     if (!META.version) throw new Error('The connector in the finance sheet is an old version. Paste the latest Code.gs and deploy a new version.');
-    const [is] = await read(A1(IS, 1, 3, 140, 4));
     const income = [], expense = [];
     is.forEach(([code, name]) => {
       name = String(name).trim();
@@ -927,7 +927,11 @@ function setSelect(sel, v) { sel.value = v; if (sel._sync) sel._sync(); }
 // ===================================================================== routing
 let INIT = null;
 const PAGES = ['connect', 'home', 'cashflow', 'events', 'new-event', 'event', 'reserve'];
-function show(name) { PAGES.forEach(p => $('page-' + p).classList.toggle('hidden', p !== name)); window.scrollTo(0, 0); }
+function show(name) {
+  const was = PAGES.find(p => !$('page-' + p).classList.contains('hidden'));
+  PAGES.forEach(p => $('page-' + p).classList.toggle('hidden', p !== name));
+  if (was !== name) window.scrollTo(0, 0);
+}
 
 function route() {
   if (!INIT) return;
@@ -942,20 +946,41 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 
+// A copy of the start-up data (categories, tab list) is kept on this browser so a reload shows the page at once.
+// The fresh copy is fetched in the background; nothing is read or saved from the sheet until it arrives.
+const CACHE_KEY = DEMO ? 'fin_cache_demo' : 'fin_cache';
+let READY = Promise.resolve(), readyDone = () => {};
 async function start() {
-  try { INIT = await api('init'); }
-  catch (err) { if (!$('page-connect').classList.contains('hidden')) return; showLogin(err.message); return; }
+  READY = new Promise(r => { readyDone = r; });
+  let cached = null; try { cached = JSON.parse(store.get(CACHE_KEY) || 'null'); } catch (e) {}
+  if (cached && cached.init && cached.meta && cached.init.user === store.get('fin_user')) {
+    INIT = cached.init; META = cached.meta; CATS = { income: INIT.incomeCategories, expense: INIT.expenseCategories };
+    applyInit(); route();
+  }
+  let fresh;
+  try { fresh = await api('init'); }
+  catch (err) { readyDone(); if (!$('page-connect').classList.contains('hidden')) return; showLogin(err.message); return; }
+  store.set(CACHE_KEY, JSON.stringify({ init: fresh, meta: META }));
+  const same = INIT && JSON.stringify(INIT) === JSON.stringify(fresh);
+  const firstPaint = !INIT;
+  INIT = fresh;
+  readyDone();
+  if (firstPaint) { applyInit(); route(); }
+  else if (!same) { applyInit(true); }
+}
+function applyInit(refresh) {
   $('modeBadge').classList.toggle('hidden', !DEMO);
   $('whoami').textContent = 'Hi, ' + (INIT.user || '');
   $('heroHi').textContent = 'Welcome back' + (INIT.user ? ', ' + INIT.user : '');
   $('whoami').classList.remove('hidden');
   $('logoutBtn').classList.remove('hidden');
-  $('cfDate').value = $('evDate').value = $('rsDate').value = INIT.today || today();
+  if (!refresh) $('cfDate').value = $('evDate').value = $('rsDate').value = INIT.today || today();
   const m0 = (INIT.today || today()).slice(0, 7);
   const months = []; for (let i = 0; i < 12; i++) { const d = new Date(m0 + '-01T00:00:00'); d.setMonth(d.getMonth() - i); months.push(d.toISOString().slice(0, 7)); }
   $('cfMonth').innerHTML = months.map(m => `<option value="${m}">${monthName(m)}</option>`).join('');
+  const keepCat = $('cfCategory').value, keepMonth = $('cfMonth').value;
   fillCfCategory();
-  route();
+  if (refresh) { if (keepCat) setSelect($('cfCategory'), keepCat); if (keepMonth) setSelect($('cfMonth'), keepMonth); }
 }
 
 // ===================================================================== cash flow
@@ -1306,7 +1331,7 @@ $('rsSave').addEventListener('click', e => busy(e.target, async () => {
 // ===================================================================== login
 function showLogin(msg) {
   INIT = null;
-  store.del('fin_token');
+  store.del('fin_token'); store.del(CACHE_KEY);
   $('whoami').classList.add('hidden'); $('logoutBtn').classList.add('hidden');
   $('lgServerWrap').classList.toggle('hidden', !!serverUrl() || DEMO);
   $('lgError').textContent = msg && !/^Please log in$/.test(msg) ? msg : '';
